@@ -1,0 +1,245 @@
+@import "tailwindcss";
+
+/* =========================
+   🎨 TOKENS MOKKO
+========================= */
+:root {
+  --mokko-bg: #1A1A14;
+  --mokko-surface: rgba(255, 255, 255, 0.04);
+  --mokko-surface-strong: rgba(255, 255, 255, 0.06);
+  --mokko-border: rgba(255, 255, 255, 0.1);
+  --mokko-text: #F5F0E8;
+  --mokko-text-soft: rgba(245, 240, 232, 0.72);
+  --mokko-text-muted: rgba(245, 240, 232, 0.52);
+  --mokko-primary: #E8C547;
+  --mokko-primary-strong: #f0cf57;
+  --mokko-green: #2D5A27;
+  --mokko-green-deep: #16301b;
+  --mokko-dark: #0F0F0B;
+  --mokko-radius-xl: 1.5rem;
+  --mokko-radius-2xl: 2rem;
+  --mokko-shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.18);
+  --mokko-shadow-glow: 0 20px 60px rgba(232, 197, 71, 0.18);
+}
+
+/* =========================
+   🌐 RESET / BASE
+========================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(232, 197, 71, 0.08), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(45, 90, 39, 0.08), transparent 32%),
+    var(--mokko-bg);
+  color: var(--mokko-text);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a {
+  text-decoration: none;
+}
+
+/* =========================
+   ✨ SELECTION
+========================= */
+::selection {
+  background: var(--mokko-primary);
+  color: var(--mokko-bg);
+}
+
+/* =========================
+   📜 SCROLLBAR
+========================= */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #11110d;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(232, 197, 71, 0.7);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(232, 197, 71, 0.95);
+}
+
+/* =========================
+   🔎 FOCUS VISIBLE
+========================= */
+:focus-visible {
+  outline: 2px solid var(--mokko-primary);
+  outline-offset: 2px;
+}
+
+/* =========================
+   🧱 UTILIDADES GLOBALES
+========================= */
+.mokko-container {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .mokko-container {
+    padding-inline: 1.5rem;
+  }
+}
+
+.mokko-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.03));
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: var(--mokko-shadow-soft);
+  backdrop-filter: blur(10px);
+}
+
+.mokko-card-subtle {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(8px);
+}
+
+.mokko-card-highlight {
+  background: var(--mokko-primary);
+  color: var(--mokko-bg);
+  border: 1px solid rgba(232, 197, 71, 0.45);
+  box-shadow: var(--mokko-shadow-glow);
+}
+
+.mokko-button-primary {
+  background: var(--mokko-primary);
+  color: var(--mokko-bg);
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.mokko-button-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(232, 197, 71, 0.24);
+}
+
+.mokko-button-secondary {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--mokko-text);
+  font-weight: 600;
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.mokko-button-secondary:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.16);
+  transform: translateY(-1px);
+}
+
+.mokko-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mokko-badge-primary {
+  background: rgba(232, 197, 71, 0.12);
+  border: 1px solid rgba(232, 197, 71, 0.24);
+  color: var(--mokko-primary);
+}
+
+.mokko-badge-dark {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--mokko-bg);
+}
+
+.mokko-text-muted {
+  color: var(--mokko-text-muted);
+}
+
+.mokko-text-soft {
+  color: var(--mokko-text-soft);
+}
+
+.mokko-glow-yellow {
+  box-shadow: 0 0 0 1px rgba(232, 197, 71, 0.06), 0 18px 60px rgba(232, 197, 71, 0.14);
+}
+
+.mokko-section-title {
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--mokko-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.mokko-hero-copy {
+  max-width: 42rem;
+}
+
+.mokko-price-card {
+  border-radius: 2rem;
+  padding: 2rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.mokko-price-card::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  background: rgba(255,255,255,0.12);
+}
+
+.mokko-price-card:hover {
+  transform: translateY(-2px);
+}
+
+.mokko-transition {
+  transition: all 0.25s ease;
+}
+
+/* =========================
+   📱 AJUSTES MOBILE
+========================= */
+@media (max-width: 639px) {
+  body {
+    overflow-x: hidden;
+  }
+}
