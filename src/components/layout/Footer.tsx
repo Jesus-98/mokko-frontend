@@ -1,4 +1,6 @@
 import { Facebook, Instagram, Mail, MessageCircle } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 function TikTokIcon({ className = "h-5 w-5" }) {
   return (
@@ -9,6 +11,31 @@ function TikTokIcon({ className = "h-5 w-5" }) {
 }
 
 export default function Footer() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const goToTop = (path: string) => {
+    navigate(path);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const goToSection = (sectionId: string) => {
+    if (location.pathname !== "/") {
+      navigate("/");
+
+      window.setTimeout(() => {
+        document.getElementById(sectionId)?.scrollIntoView({
+          behavior: "smooth",
+        });
+      }, 120);
+
+      return;
+    }
+
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <footer id="acceso" className="border-t border-white/10 bg-black/30">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
@@ -19,9 +46,12 @@ export default function Footer() {
             <p className="mt-2 text-sm text-white/60">
               Identificación inteligente para mascotas.
             </p>
+
             <div className="mt-5 flex gap-3">
               <a
-                href="#"
+                href="https://www.facebook.com/profile.php?id=61569232317136/"
+                target="_blank"
+                rel="noreferrer"
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:border-[#E8C547]/40 hover:bg-[#E8C547]/10 hover:text-[#E8C547]"
                 aria-label="Facebook"
               >
@@ -29,7 +59,9 @@ export default function Footer() {
               </a>
 
               <a
-                href="#"
+                href="https://www.instagram.com/mokko.pet/"
+                target="_blank"
+                rel="noreferrer"
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:border-[#E8C547]/40 hover:bg-[#E8C547]/10 hover:text-[#E8C547]"
                 aria-label="Instagram"
               >
@@ -37,7 +69,9 @@ export default function Footer() {
               </a>
 
               <a
-                href="#"
+                href="https://www.tiktok.com/@mokkopet"
+                target="_blank"
+                rel="noreferrer"
                 className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/70 transition hover:border-[#E8C547]/40 hover:bg-[#E8C547]/10 hover:text-[#E8C547]"
                 aria-label="TikTok"
               >
@@ -52,15 +86,38 @@ export default function Footer() {
             </h3>
 
             <div className="mt-4 flex flex-col gap-3 text-sm text-white/70">
-              <a href="#como-funciona" className="hover:text-white">
+              <button
+                type="button"
+                onClick={() => goToSection("como-funciona")}
+                className="text-left transition hover:text-white"
+              >
                 Cómo funciona
-              </a>
-              <a href="#planes" className="hover:text-white">
-                Quiero mi placa mokko
-              </a>
-              <a href="#cta" className="hover:text-white">
+              </button>
+
+              <button
+                type="button"
+                onClick={() => goToSection("planes")}
+                className="text-left transition hover:text-white"
+              >
+                Quiero mi placa Mokko
+              </button>
+
+              <a
+                href="https://wa.me/51906359973?text=Hola,%20quiero%20ser%20aliado%20de%20Mokko.%20%C2%BFMe%20pueden%20dar%20informaci%C3%B3n%3F"
+                target="_blank"
+                rel="noreferrer"
+                className="text-left transition hover:text-white"
+              >
                 Quiero ser aliado
               </a>
+
+              <button
+                type="button"
+                onClick={() => goToTop(user ? "/dashboard" : "/login")}
+                className="text-left transition hover:text-white"
+              >
+                {user ? "Mi cuenta" : "Iniciar sesión"}
+              </button>
             </div>
           </div>
 
@@ -71,21 +128,21 @@ export default function Footer() {
 
             <div className="mt-4 flex flex-col gap-3">
               <a
-                href="mailto:hola@mokko.pet"
+                href="mailto:mokkopet@gmail.com"
                 className="flex items-center gap-2 text-sm text-white/70 transition hover:text-white"
               >
                 <Mail size={16} className="text-[#E8C547]" />
-                hola@mokko.pet
+                mokkopet@gmail.com
               </a>
 
               <a
-                href="https://wa.me/51944606429"
+                href="https://wa.me/51906359973?text=Hola,%20tengo%20una%20consulta%20sobre%20Mokko.%20%C2%BFMe%20pueden%20ayudar%3F"
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-2 text-sm text-white/70 transition hover:text-white"
               >
                 <MessageCircle size={16} className="text-[#E8C547]" />
-                +51 944 606 429
+                +51 906 359 973
               </a>
             </div>
           </div>
@@ -95,12 +152,12 @@ export default function Footer() {
           <span>© 2026 Mokko. Todos los derechos reservados.</span>
 
           <div className="flex gap-4">
-            <a href="#" className="hover:text-white/70">
+            <Link to="/privacidad" className="hover:text-white/70">
               Privacidad
-            </a>
-            <a href="#" className="hover:text-white/70">
+            </Link>
+            <Link to="/terminos" className="hover:text-white/70">
               Términos
-            </a>
+            </Link>
           </div>
         </div>
       </div>
