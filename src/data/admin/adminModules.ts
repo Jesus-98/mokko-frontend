@@ -8,7 +8,7 @@ export const adminModules: AdminModuleItem[] = [
     href: "/admin/pedidos",
   },
   {
-    key: "inventory",
+    key: "inventory_tags",
     title: "Inventario de placas",
     description:
       "Controla códigos fabricados, pendientes y exportación para producción.",
