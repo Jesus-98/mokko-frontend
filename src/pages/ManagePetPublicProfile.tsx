@@ -67,7 +67,10 @@ function primeraRelacion<T>(valor: Relacion<T>): T | null {
   return Array.isArray(valor) ? valor[0] ?? null : valor;
 }
 
-function perfilPorDefecto(petId: string, planDetectado: PlanVendido | null): PerfilMascota {
+function perfilPorDefecto(
+  petId: string,
+  planDetectado: PlanVendido | null
+): PerfilMascota {
   const esCustom = planDetectado === "custom";
 
   return {
@@ -162,8 +165,7 @@ export default function ManagePetPublicProfile() {
 
         if (!montado) return;
 
-        const mascotaActual = petData as Mascota;
-        setMascota(mascotaActual);
+        setMascota(petData as Mascota);
 
         const { data: profileData, error: profileError } = await supabase
           .from("pet_profiles")
@@ -234,17 +236,12 @@ export default function ManagePetPublicProfile() {
           (profileData as PerfilMascota | null) ??
           perfilPorDefecto(petId, planDetectado);
 
-        const esCustom = planDetectado === "custom";
+        perfilNormalizado.allow_found_reports = true;
 
-        if (!esCustom) {
-          perfilNormalizado.medical_profile_enabled = false;
+        if (!perfilNormalizado.medical_profile_enabled) {
           perfilNormalizado.show_medical_alerts = false;
           perfilNormalizado.emergency_message = null;
-        } else {
-          perfilNormalizado.medical_profile_enabled = true;
         }
-
-        perfilNormalizado.allow_found_reports = true;
 
         setPerfil(perfilNormalizado);
         setVisibilidadOriginal(perfilNormalizado.visibility_status);
@@ -277,9 +274,11 @@ export default function ManagePetPublicProfile() {
   const etiquetaRaza = useMemo(() => {
     if (!mascota) return null;
     const raza = primeraRelacion(mascota.pet_breeds);
+
     if (mascota.breed_custom?.trim()) return mascota.breed_custom.trim();
     if (raza?.name_es?.trim()) return raza.name_es.trim();
     if (raza?.name?.trim()) return raza.name.trim();
+
     return null;
   }, [mascota]);
 
@@ -290,7 +289,7 @@ export default function ManagePetPublicProfile() {
 
   const esPrivado = perfil?.visibility_status === "private";
   const esLostMode = perfil?.visibility_status === "lost_mode";
-  const tieneFuncionesCustom = tagActivo?.sold_plan_type === "custom";
+  const tienePerfilMedico = !!perfil?.medical_profile_enabled;
 
   const actualizarPerfil = <K extends keyof PerfilMascota>(
     campo: K,
@@ -352,11 +351,13 @@ export default function ManagePetPublicProfile() {
         show_phone: perfil.show_phone,
         show_whatsapp: perfil.show_whatsapp,
         show_address: perfil.show_address,
-        show_medical_alerts: tieneFuncionesCustom ? perfil.show_medical_alerts : false,
-        medical_profile_enabled: tieneFuncionesCustom,
+        show_medical_alerts: perfil.medical_profile_enabled
+          ? perfil.show_medical_alerts
+          : false,
+        medical_profile_enabled: perfil.medical_profile_enabled,
         lost_mode_message: perfil.lost_mode_message?.trim() || null,
         address_text: perfil.address_text?.trim() || null,
-        emergency_message: tieneFuncionesCustom
+        emergency_message: perfil.medical_profile_enabled
           ? perfil.emergency_message?.trim() || null
           : null,
         lost_mode_activated_at: lostModeActivatedAt,
@@ -364,9 +365,7 @@ export default function ManagePetPublicProfile() {
 
       const { data, error } = await supabase
         .from("pet_profiles")
-        .upsert(payload, {
-          onConflict: "pet_id",
-        })
+        .upsert(payload, { onConflict: "pet_id" })
         .select(`
           pet_id,
           visibility_status,
@@ -459,11 +458,14 @@ export default function ManagePetPublicProfile() {
 
                 <h1 className="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">
                   Configura cómo se mostrará{" "}
-                  <span className="text-[#E8C547]">{mascota?.name || "tu mascota"}</span>
+                  <span className="text-[#E8C547]">
+                    {mascota?.name || "tu mascota"}
+                  </span>
                 </h1>
 
                 <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                  Define el modo del perfil y qué datos se mostrarán al escanear la placa.
+                  Define el modo del perfil y qué datos se mostrarán al escanear
+                  la placa.
                 </p>
               </div>
 
@@ -504,7 +506,9 @@ export default function ManagePetPublicProfile() {
                       </div>
 
                       <div>
-                        <div className="text-2xl font-semibold">{mascota?.name}</div>
+                        <div className="text-2xl font-semibold">
+                          {mascota?.name}
+                        </div>
                         <div className="mt-1 text-sm text-white/60">
                           {etiquetaEspecie}
                           {etiquetaRaza ? ` • ${etiquetaRaza}` : ""}
@@ -519,9 +523,13 @@ export default function ManagePetPublicProfile() {
                       />
                       <ResumenItem
                         label="Plan detectado"
-                        value={tagActivo ? etiquetaPlan(tagActivo.sold_plan_type) : "Sin detectar"}
+                        value={
+                          tagActivo
+                            ? etiquetaPlan(tagActivo.sold_plan_type)
+                            : "Sin detectar"
+                        }
                       />
-                      {tieneFuncionesCustom && (
+                      {tienePerfilMedico && (
                         <ResumenItem
                           label="Perfil médico"
                           value="Desbloqueado"
@@ -540,7 +548,9 @@ export default function ManagePetPublicProfile() {
                         <Eye className="h-5 w-5 text-[#9fd598]" />
                       )}
 
-                      <h2 className="text-2xl font-semibold">Resumen del modo</h2>
+                      <h2 className="text-2xl font-semibold">
+                        Resumen del modo
+                      </h2>
                     </div>
 
                     <div className="mt-5 rounded-[24px] border border-white/10 bg-[#141410] p-5 text-sm leading-7 text-white/72">
@@ -553,13 +563,15 @@ export default function ManagePetPublicProfile() {
 
                     <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75">
                       <EyeOff className="h-4.5 w-4.5" />
-                      Los reportes y el envío de ubicación siempre estarán disponibles.
+                      Los reportes y el envío de ubicación siempre estarán
+                      disponibles.
                     </div>
 
                     {esPrivado && (
                       <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75">
                         <EyeOff className="h-4.5 w-4.5" />
-                        Los toggles visuales quedan guardados, pero no se aplican mientras el perfil esté en privado.
+                        Los toggles visuales quedan guardados, pero no se
+                        aplican mientras el perfil esté en privado.
                       </div>
                     )}
                   </section>
@@ -573,7 +585,8 @@ export default function ManagePetPublicProfile() {
                     <section>
                       <h2 className="text-2xl font-semibold">Modo del perfil</h2>
                       <p className="mt-2 text-sm leading-7 text-white/65">
-                        Elige cómo quieres mostrar el perfil cuando alguien escanee la placa.
+                        Elige cómo quieres mostrar el perfil cuando alguien
+                        escanee la placa.
                       </p>
 
                       <div className="mt-5 grid gap-3">
@@ -581,21 +594,27 @@ export default function ManagePetPublicProfile() {
                           activo={perfil?.visibility_status === "public"}
                           titulo="Público"
                           descripcion="Muestra el perfil normal con los datos permitidos."
-                          onClick={() => actualizarPerfil("visibility_status", "public")}
+                          onClick={() =>
+                            actualizarPerfil("visibility_status", "public")
+                          }
                         />
 
                         <SelectorModo
                           activo={perfil?.visibility_status === "private"}
                           titulo="Privado"
                           descripcion="Solo muestra nombre y foto. Igual permite reportes y ubicación."
-                          onClick={() => actualizarPerfil("visibility_status", "private")}
+                          onClick={() =>
+                            actualizarPerfil("visibility_status", "private")
+                          }
                         />
 
                         <SelectorModo
                           activo={perfil?.visibility_status === "lost_mode"}
                           titulo="Perdido"
                           descripcion="Muestra el perfil con alerta visual y usa un mensaje personalizado."
-                          onClick={() => actualizarPerfil("visibility_status", "lost_mode")}
+                          onClick={() =>
+                            actualizarPerfil("visibility_status", "lost_mode")
+                          }
                         />
                       </div>
                     </section>
@@ -603,7 +622,8 @@ export default function ManagePetPublicProfile() {
                     <section>
                       <h3 className="text-xl font-semibold">Datos visibles</h3>
                       <p className="mt-2 text-sm leading-7 text-white/65">
-                        Define qué información mostrar cuando el perfil esté en modo público o perdido.
+                        Define qué información mostrar cuando el perfil esté en
+                        modo público o perdido.
                       </p>
 
                       <div className="mt-5 space-y-3">
@@ -665,7 +685,7 @@ export default function ManagePetPublicProfile() {
                       </div>
                     </section>
 
-                    {tieneFuncionesCustom && (
+                    {tienePerfilMedico && (
                       <section className="rounded-[28px] border border-[#E8C547]/25 bg-[#E8C547]/10 p-5">
                         <div className="flex items-center gap-3">
                           <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
@@ -673,18 +693,19 @@ export default function ManagePetPublicProfile() {
                           </div>
                           <div>
                             <h3 className="text-xl font-semibold text-white">
-                              Funciones extra Custom
+                              Perfil médico
                             </h3>
                             <p className="mt-1 text-sm leading-7 text-white/75">
-                              Estas opciones solo están disponibles porque esta mascota tiene una placa Custom activa.
+                              Estas opciones están disponibles porque esta
+                              mascota ya tiene el perfil médico desbloqueado.
                             </p>
                           </div>
                         </div>
 
                         <div className="mt-5 space-y-3">
                           <ToggleFila
-                            titulo="Mostrar alertas médicas"
-                            descripcion="Permite mostrar alertas médicas en el perfil público."
+                            titulo="Mostrar alertas médicas y vacunas"
+                            descripcion="Permite mostrar alertas médicas, mensaje de emergencia y vacunas registradas en el perfil público."
                             checked={!!perfil?.show_medical_alerts}
                             onChange={(checked) =>
                               actualizarPerfil("show_medical_alerts", checked)
@@ -701,20 +722,32 @@ export default function ManagePetPublicProfile() {
                             rows={3}
                             value={perfil?.emergency_message ?? ""}
                             onChange={(event) =>
-                              actualizarPerfil("emergency_message", event.target.value)
+                              actualizarPerfil(
+                                "emergency_message",
+                                event.target.value
+                              )
                             }
-                            disabled={esPrivado}
+                            disabled={esPrivado || !perfil?.show_medical_alerts}
                             placeholder="Ej. Si necesita medicación, comunícate lo antes posible."
                             className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-60"
                           />
+                          {!perfil?.show_medical_alerts && (
+                            <p className="mt-2 text-xs leading-6 text-white/55">
+                              Este mensaje solo se muestra si activas las alertas
+                              médicas.
+                            </p>
+                          )}
                         </div>
                       </section>
                     )}
 
                     <section>
-                      <h3 className="text-xl font-semibold">Mensaje para modo perdido</h3>
+                      <h3 className="text-xl font-semibold">
+                        Mensaje para modo perdido
+                      </h3>
                       <p className="mt-2 text-sm leading-7 text-white/65">
-                        Este mensaje es obligatorio cuando activas el modo perdido.
+                        Este mensaje es obligatorio cuando activas el modo
+                        perdido.
                       </p>
 
                       <div
@@ -727,7 +760,8 @@ export default function ManagePetPublicProfile() {
                         {esLostMode && (
                           <div className="mb-3 inline-flex items-center gap-2 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/12 px-3 py-2 text-sm text-[#f6df8a]">
                             <AlertTriangle className="h-4 w-4" />
-                            Este mensaje se mostrará al público cuando la mascota esté en modo perdido.
+                            Este mensaje se mostrará al público cuando la
+                            mascota esté en modo perdido.
                           </div>
                         )}
 
@@ -738,7 +772,10 @@ export default function ManagePetPublicProfile() {
                           rows={4}
                           value={perfil?.lost_mode_message ?? ""}
                           onChange={(event) =>
-                            actualizarPerfil("lost_mode_message", event.target.value)
+                            actualizarPerfil(
+                              "lost_mode_message",
+                              event.target.value
+                            )
                           }
                           placeholder="Ej. Mi mascota está perdida. Si la ves, comparte tu ubicación o comunícate de inmediato."
                           className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
@@ -748,7 +785,8 @@ export default function ManagePetPublicProfile() {
 
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-6">
                       <div className="text-sm text-white/55">
-                        Los cambios se aplicarán al perfil visible al escanear la placa.
+                        Los cambios se aplicarán al perfil visible al escanear la
+                        placa.
                       </div>
 
                       <button
@@ -814,7 +852,9 @@ function SelectorModo({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-base font-semibold">{titulo}</div>
-          <div className="mt-1 text-sm leading-7 text-white/65">{descripcion}</div>
+          <div className="mt-1 text-sm leading-7 text-white/65">
+            {descripcion}
+          </div>
         </div>
 
         <div

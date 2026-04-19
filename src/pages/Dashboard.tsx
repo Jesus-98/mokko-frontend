@@ -60,6 +60,11 @@ function getBreedLabel(pet: PetRow) {
   return null;
 }
 
+function isPendingReport(status: string | null | undefined) {
+  const normalized = (status ?? "").trim().toLowerCase();
+  return normalized === "new" || normalized === "viewed";
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, profile, loading: authLoading } = useAuth();
@@ -204,17 +209,21 @@ export default function Dashboard() {
     return map;
   }, [petTags]);
 
+  const pendingReports = useMemo(() => {
+    return reports.filter((report) => isPendingReport(report.status));
+  }, [reports]);
+
   const reportsByPet = useMemo(() => {
     const map = new Map<string, number>();
 
-    for (const report of reports) {
+    for (const report of pendingReports) {
       if (report.pet_id) {
         map.set(report.pet_id, (map.get(report.pet_id) || 0) + 1);
       }
     }
 
     return map;
-  }, [reports]);
+  }, [pendingReports]);
 
   const petsWithStats = useMemo<PetWithStats[]>(() => {
     return pets.map((pet) => ({
@@ -229,7 +238,7 @@ export default function Dashboard() {
     () => petTags.filter((tag) => tag.status === "active").length,
     [petTags]
   );
-  const totalReports = reports.length;
+  const totalReports = pendingReports.length;
 
   const showLoading = authLoading || loading;
 
@@ -310,13 +319,13 @@ export default function Dashboard() {
 
                     <div className="rounded-[28px] border border-[#E8C547]/16 bg-[#E8C547]/8 p-6">
                       <div className="text-sm uppercase tracking-[0.16em] text-white/45">
-                        Reportes
+                        Reportes pendientes
                       </div>
                       <div className="mt-4 text-4xl font-semibold text-[#F5F0E8]">
                         {showLoading ? "—" : totalReports}
                       </div>
                       <p className="mt-3 text-sm leading-7 text-white/65">
-                        Reportes registrados asociados a tus mascotas.
+                        Reportes nuevos o vistos que siguen pendientes.
                       </p>
                     </div>
                   </div>
@@ -407,6 +416,7 @@ export default function Dashboard() {
 
                                   <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80">
                                     {pet.petReports} reporte
+                                    {pet.petReports === 1 ? "" : "s"} pendiente
                                     {pet.petReports === 1 ? "" : "s"}
                                   </div>
                                 </div>

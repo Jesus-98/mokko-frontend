@@ -51,6 +51,14 @@ type RespuestaPerfilPublico = {
     conditions_text: string | null;
     medications_text: string | null;
     dietary_notes: string | null;
+    vaccinations?: {
+      id: string;
+      vaccine_name: string | null;
+      applied_at: string | null;
+      next_due_at: string | null;
+      dose_number: number | null;
+      notes: string | null;
+    }[] | null;
   } | null;
 };
 
@@ -122,6 +130,39 @@ function getUnavailableStateLabel(status?: string | null) {
     default:
       return "Placa no disponible";
   }
+}
+
+function getEtiquetaSexo(sex?: string | null) {
+  const valor = sex?.trim().toLowerCase();
+
+  if (!valor) return null;
+  if (valor === "male" || valor === "m" || valor === "macho") return "Macho";
+  if (valor === "female" || valor === "f" || valor === "hembra") {
+    return "Hembra";
+  }
+  if (valor === "unknown" || valor === "desconocido") return "No especificado";
+
+  return sex;
+}
+
+function formatearFecha(fecha?: string | null) {
+  if (!fecha) return "No registrada";
+
+  const date = new Date(fecha);
+
+  if (Number.isNaN(date.getTime())) {
+    return fecha;
+  }
+
+  return new Intl.DateTimeFormat("es-PE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function tieneTexto(value?: string | null) {
+  return !!value?.trim();
 }
 
 export default function PublicProfile() {
@@ -225,6 +266,10 @@ export default function PublicProfile() {
   const dueno = datos?.owner ?? null;
   const medico = datos?.medical ?? null;
 
+  const vacunas = Array.isArray(medico?.vaccinations)
+    ? medico.vaccinations
+    : [];
+
   const estadoPlaca = datos?.tag_status ?? null;
   const placaNoDisponible = isTagUnavailable(estadoPlaca);
   const tituloPlacaNoDisponible = getUnavailableTitle(
@@ -261,13 +306,17 @@ export default function PublicProfile() {
     return null;
   }, [mascota?.species]);
 
+  const etiquetaSexo = useMemo(() => {
+    return getEtiquetaSexo(mascota?.sex);
+  }, [mascota?.sex]);
+
   const itemsInfoPublica = useMemo(() => {
     if (!mascota || esPrivado) return [];
 
     const items = [
       { label: "Especie", value: etiquetaEspecie },
       { label: "Raza", value: mascota.breed || null },
-      { label: "Sexo", value: mascota.sex || null },
+      { label: "Sexo", value: etiquetaSexo },
       { label: "Color", value: mascota.color || null },
       { label: "Dueño", value: dueno?.full_name || null },
       { label: "Teléfono", value: dueno?.phone || null },
@@ -279,21 +328,31 @@ export default function PublicProfile() {
       (item): item is { label: string; value: string } =>
         !!item.value && item.value.trim().length > 0
     );
-  }, [mascota, dueno, etiquetaEspecie, esPrivado]);
+  }, [mascota, dueno, etiquetaEspecie, etiquetaSexo, esPrivado]);
 
-  const mensajePrincipal =
-    perfil?.message?.trim() ||
-    "Si encontraste a esta mascota, por favor contacta a su dueño.";
+  const mensajePrincipal = esLostMode
+    ? perfil?.lost_mode_message?.trim() ||
+      perfil?.message?.trim() ||
+      "Si viste a esta mascota, por favor contacta a su familia lo antes posible."
+    : perfil?.message?.trim() ||
+      "Si encontraste a esta mascota, por favor contacta a su dueño.";
+
+  const mostrarVacunas =
+    !esPrivado &&
+    !!medico?.enabled &&
+    Array.isArray(vacunas) &&
+    vacunas.length > 0;
 
   const mostrarSeccionMedica =
     !esPrivado &&
     !!medico?.enabled &&
     !!(
-      medico?.allergies_text ||
-      medico?.conditions_text ||
-      medico?.medications_text ||
-      medico?.dietary_notes ||
-      medico?.sterilized
+      tieneTexto(medico?.allergies_text) ||
+      tieneTexto(medico?.conditions_text) ||
+      tieneTexto(medico?.medications_text) ||
+      tieneTexto(medico?.dietary_notes) ||
+      medico?.sterilized !== null ||
+      mostrarVacunas
     );
 
   const hayContenidoMostrable =
@@ -332,7 +391,8 @@ export default function PublicProfile() {
                   No se pudo cargar el perfil
                 </div>
                 <p className="mt-2 text-sm leading-7 text-red-200">
-                  {mensajeError || "La placa no está disponible o no está vinculada."}
+                  {mensajeError ||
+                    "La placa no está disponible o no está vinculada."}
                 </p>
               </div>
             ) : placaNoDisponible ? (
@@ -344,7 +404,9 @@ export default function PublicProfile() {
                     <span
                       className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${unavailableAccent.badge}`}
                     >
-                      <span className={`h-2 w-2 rounded-full ${unavailableAccent.dot}`} />
+                      <span
+                        className={`h-2 w-2 rounded-full ${unavailableAccent.dot}`}
+                      />
                       {unavailableStateLabel}
                     </span>
 
@@ -417,7 +479,9 @@ export default function PublicProfile() {
                                 : "bg-[#2D5A27]/18 text-[#9fd598]"
                             }`}
                           >
-                            {esLostMode && <TriangleAlert className="h-3.5 w-3.5" />}
+                            {esLostMode && (
+                              <TriangleAlert className="h-3.5 w-3.5" />
+                            )}
                             {esLostMode
                               ? "Mascota perdida"
                               : esPrivado
@@ -446,7 +510,9 @@ export default function PublicProfile() {
 
                       {!esPrivado && (etiquetaEspecie || mascota?.breed) && (
                         <p className="mt-3 text-sm leading-7 text-white/70 sm:text-base">
-                          {[etiquetaEspecie, mascota?.breed].filter(Boolean).join(" • ")}
+                          {[etiquetaEspecie, mascota?.breed]
+                            .filter(Boolean)
+                            .join(" • ")}
                         </p>
                       )}
 
@@ -459,7 +525,9 @@ export default function PublicProfile() {
                           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#E8C547]">
                             Mensaje de emergencia
                           </div>
-                          <div className="text-white">{perfil.emergency_message}</div>
+                          <div className="text-white">
+                            {perfil.emergency_message}
+                          </div>
                         </div>
                       )}
 
@@ -516,7 +584,9 @@ export default function PublicProfile() {
 
                 {itemsInfoPublica.length > 0 && (
                   <section className="rounded-[34px] border border-white/10 bg-white/[0.04] p-5 md:p-6 shadow-[0_20px_80px_rgba(0,0,0,0.22)]">
-                    <h2 className="text-2xl font-semibold text-white">Información</h2>
+                    <h2 className="text-2xl font-semibold text-white">
+                      Información
+                    </h2>
 
                     <div className="mt-5 grid gap-4 sm:grid-cols-2">
                       {itemsInfoPublica.map((item) => (
@@ -539,7 +609,7 @@ export default function PublicProfile() {
                 <section id="panel-reporte">
                   <FoundReportPanel
                     modo={visibilidad}
-                    permiteReportes={true}
+                    permiteReportes={perfil?.allow_found_reports ?? true}
                     nombreMascota={mascota?.name || "Mascota"}
                     tagId={datos?.tag_id || null}
                     petId={mascota?.id || null}
@@ -565,9 +635,18 @@ export default function PublicProfile() {
                       </div>
 
                       <div className="mt-5 space-y-3">
-                        <CajaMedica label="Alergias" value={medico?.allergies_text} />
-                        <CajaMedica label="Condiciones" value={medico?.conditions_text} />
-                        <CajaMedica label="Medicamentos" value={medico?.medications_text} />
+                        <CajaMedica
+                          label="Alergias"
+                          value={medico?.allergies_text}
+                        />
+                        <CajaMedica
+                          label="Condiciones"
+                          value={medico?.conditions_text}
+                        />
+                        <CajaMedica
+                          label="Medicamentos"
+                          value={medico?.medications_text}
+                        />
                         <CajaMedica label="Dieta" value={medico?.dietary_notes} />
                         <CajaMedica
                           label="Esterilizado"
@@ -579,6 +658,27 @@ export default function PublicProfile() {
                               : "No"
                           }
                         />
+
+                        {mostrarVacunas && (
+                          <div className="mt-6">
+                            <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                              Vacunas registradas
+                            </div>
+
+                            <div className="space-y-3">
+                              {vacunas.map((vacuna) => (
+                                <CajaVacuna
+                                  key={vacuna.id}
+                                  nombre={vacuna.vaccine_name}
+                                  aplicada={vacuna.applied_at}
+                                  proximaDosis={vacuna.next_due_at}
+                                  dosis={vacuna.dose_number}
+                                  notas={vacuna.notes}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </section>
                   )}
@@ -631,6 +731,68 @@ function CajaMedica({
       </div>
       <div className="mt-2 text-sm leading-7 text-white/82">
         {value?.trim() || "No especificado"}
+      </div>
+    </div>
+  );
+}
+
+function CajaVacuna({
+  nombre,
+  aplicada,
+  proximaDosis,
+  dosis,
+  notas,
+}: {
+  nombre?: string | null;
+  aplicada?: string | null;
+  proximaDosis?: string | null;
+  dosis?: number | null;
+  notas?: string | null;
+}) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-white/88">
+            {nombre?.trim() || "Vacuna registrada"}
+          </div>
+
+          {typeof dosis === "number" && dosis > 0 && (
+            <div className="mt-1 text-sm text-white/60">
+              Dosis {dosis}
+            </div>
+          )}
+
+          {notas?.trim() && (
+            <div className="mt-2 text-sm leading-7 text-white/62">
+              {notas}
+            </div>
+          )}
+        </div>
+
+        <span className="inline-flex rounded-full border border-[#E8C547]/20 bg-[#E8C547]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#f6df8a]">
+          Vacuna
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-[18px] border border-white/10 bg-[#141410] px-3 py-3">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">
+            Aplicada
+          </div>
+          <div className="mt-1 text-sm font-medium text-white/82">
+            {formatearFecha(aplicada)}
+          </div>
+        </div>
+
+        <div className="rounded-[18px] border border-white/10 bg-[#141410] px-3 py-3">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/40">
+            Vence / próxima referencia
+          </div>
+          <div className="mt-1 text-sm font-medium text-white/82">
+            {formatearFecha(proximaDosis)}
+          </div>
+        </div>
       </div>
     </div>
   );

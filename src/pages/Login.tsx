@@ -14,6 +14,34 @@ function getSafeNext(search: string) {
   return rawNext;
 }
 
+function getSiteUrl() {
+  return import.meta.env.PROD
+    ? "https://www.mokkopet.com"
+    : "http://localhost:5173";
+}
+
+function getReadableAuthError(message: string) {
+  const normalized = message.trim().toLowerCase();
+
+  if (normalized.includes("email rate limit exceeded")) {
+    return "Has solicitado demasiados correos en poco tiempo. Espera unos minutos e inténtalo nuevamente.";
+  }
+
+  if (normalized.includes("invalid login credentials")) {
+    return "Correo o contraseña incorrectos.";
+  }
+
+  if (normalized.includes("email not confirmed")) {
+    return "Debes confirmar tu correo antes de iniciar sesión.";
+  }
+
+  if (normalized.includes("too many requests")) {
+    return "Se detectaron demasiados intentos. Espera un momento e inténtalo nuevamente.";
+  }
+
+  return message;
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,11 +95,11 @@ export default function Login() {
     } catch (err) {
       console.error("handleLogin error", err);
 
-      setErrorMsg(
-        err instanceof Error
-          ? err.message
-          : "Ocurrió un error inesperado al iniciar sesión."
-      );
+      if (err instanceof Error) {
+        setErrorMsg(getReadableAuthError(err.message));
+      } else {
+        setErrorMsg("Ocurrió un error inesperado al iniciar sesión.");
+      }
     } finally {
       setLoginLoading(false);
     }
@@ -93,8 +121,10 @@ export default function Login() {
     setForgotLoading(true);
 
     try {
+      const siteUrl = getSiteUrl();
+
       const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-        redirectTo: `${window.location.origin}/update-password`,
+        redirectTo: `${siteUrl}/update-password`,
       });
 
       if (error) {
@@ -107,11 +137,11 @@ export default function Login() {
     } catch (err) {
       console.error("handleForgotPassword error", err);
 
-      setErrorMsg(
-        err instanceof Error
-          ? err.message
-          : "No se pudo enviar el correo de recuperación."
-      );
+      if (err instanceof Error) {
+        setErrorMsg(getReadableAuthError(err.message));
+      } else {
+        setErrorMsg("No se pudo enviar el correo de recuperación.");
+      }
     } finally {
       setForgotLoading(false);
     }

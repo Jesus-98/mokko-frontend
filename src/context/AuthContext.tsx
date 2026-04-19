@@ -47,6 +47,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const activeRequestRef = useRef(0);
+  const claimedGuestOrdersUserRef = useRef<string | null>(null);
+
+  const claimGuestOrdersForCurrentUser = useCallback(
+    async (sessionUser: { id: string; email?: string | null } | null) => {
+      if (!sessionUser?.id || !sessionUser.email) return;
+
+      if (claimedGuestOrdersUserRef.current === sessionUser.id) {
+        return;
+      }
+
+      const { error } = await supabase.rpc(
+        "claim_guest_orders_for_current_user"
+      );
+
+      if (error) {
+        console.error(
+          "AuthContext claim guest orders error:",
+          error.message
+        );
+        return;
+      }
+
+      claimedGuestOrdersUserRef.current = sessionUser.id;
+    },
+    []
+  );
 
   const loadProfileAndRole = useCallback(async (userId: string) => {
     const requestId = ++activeRequestRef.current;
@@ -102,7 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (requestId !== activeRequestRef.current) return;
 
       if (roleLookupRes.error) {
-        console.error("AuthContext roles lookup error:", roleLookupRes.error.message);
+        console.error(
+          "AuthContext roles lookup error:",
+          roleLookupRes.error.message
+        );
         setRole(null);
         return;
       }
@@ -122,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (sessionUser: { id: string; email?: string | null } | null) => {
       if (!sessionUser) {
         activeRequestRef.current += 1;
+        claimedGuestOrdersUserRef.current = null;
         setUser(null);
         setProfile(null);
         setRole(null);
@@ -133,15 +163,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: sessionUser.email ?? null,
       });
 
+      await claimGuestOrdersForCurrentUser(sessionUser);
       await loadProfileAndRole(sessionUser.id);
     },
-    [loadProfileAndRole]
+    [claimGuestOrdersForCurrentUser, loadProfileAndRole]
   );
 
   const refreshProfile = useCallback(async () => {
     if (!user?.id) return;
+
+    await claimGuestOrdersForCurrentUser({
+      id: user.id,
+      email: user.email,
+    });
+
     await loadProfileAndRole(user.id);
-  }, [loadProfileAndRole, user?.id]);
+  }, [claimGuestOrdersForCurrentUser, loadProfileAndRole, user]);
 
   useEffect(() => {
     let isMounted = true;
@@ -160,6 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.error("AuthContext session sync error:", error);
         activeRequestRef.current += 1;
+        claimedGuestOrdersUserRef.current = null;
         setUser(null);
         setProfile(null);
         setRole(null);
@@ -187,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.error("AuthContext initAuth error:", error);
         activeRequestRef.current += 1;
+        claimedGuestOrdersUserRef.current = null;
         setUser(null);
         setProfile(null);
         setRole(null);
@@ -227,7 +266,7 @@ export function useAuth() {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error("useAuth debe usarse dentro de AuthProvider");
   }
 
   return context;

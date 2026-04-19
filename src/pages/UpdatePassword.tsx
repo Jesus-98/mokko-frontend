@@ -81,6 +81,7 @@ export default function UpdatePassword() {
   const [isRecoveryFlow, setIsRecoveryFlow] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -148,7 +149,7 @@ export default function UpdatePassword() {
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (loading) return;
+    if (loading || redirecting) return;
 
     setErrorMsg("");
     setSuccessMsg("");
@@ -179,13 +180,16 @@ export default function UpdatePassword() {
         throw new Error(error.message);
       }
 
-      setSuccessMsg("Tu contraseña fue actualizada correctamente.");
       setPassword("");
       setConfirmPassword("");
+      setRedirecting(true);
+      setSuccessMsg(
+        "Contraseña actualizada con éxito. Te estamos llevando a tu dashboard..."
+      );
 
       window.setTimeout(() => {
         navigate("/dashboard", { replace: true });
-      }, 1200);
+      }, 1800);
     } catch (error) {
       console.error("UpdatePassword handleUpdatePassword error:", error);
       setErrorMsg(
@@ -243,7 +247,7 @@ export default function UpdatePassword() {
 
                     <button
                       type="button"
-                      onClick={() => navigate("/forgot-password")}
+                      onClick={() => navigate("/login")}
                       className="w-full rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
                     >
                       Solicitar nuevo enlace
@@ -263,7 +267,7 @@ export default function UpdatePassword() {
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 focus:bg-white/10"
                       placeholder="Ingresa tu nueva contraseña"
-                      disabled={loading}
+                      disabled={loading || redirecting}
                     />
 
                     <div className="mt-4 space-y-2">
@@ -301,7 +305,7 @@ export default function UpdatePassword() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 focus:bg-white/10"
                       placeholder="Repite tu contraseña"
-                      disabled={loading}
+                      disabled={loading || redirecting}
                     />
 
                     {confirmPassword.length > 0 && (
@@ -331,10 +335,14 @@ export default function UpdatePassword() {
 
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || redirecting}
                     className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {loading ? "Actualizando..." : "Actualizar contraseña"}
+                    {redirecting
+                      ? "Redirigiendo..."
+                      : loading
+                      ? "Actualizando..."
+                      : "Actualizar contraseña"}
                   </button>
 
                   <p className="text-center text-xs text-white/40">

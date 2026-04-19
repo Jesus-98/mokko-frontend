@@ -104,31 +104,22 @@ function getStatusClass(status: OrderStatus) {
   switch (status) {
     case "draft":
       return "border-white/10 bg-white/5 text-white/75";
-
     case "pending_payment":
       return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#E8C547]";
-
     case "payment_submitted":
       return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#E8C547]";
-
     case "paid":
       return "border-white/10 bg-white/5 text-white/85";
-
     case "in_production":
       return "border-white/10 bg-white/5 text-white/85";
-
     case "ready":
       return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#F5F0E8]";
-
     case "shipped":
       return "border-white/10 bg-white/5 text-white/85";
-
     case "delivered":
       return "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200";
-
     case "cancelled":
       return "border-red-400/20 bg-red-400/10 text-red-200";
-
     default:
       return "border-white/10 bg-white/5 text-white/75";
   }

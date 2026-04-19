@@ -414,7 +414,7 @@ export default function FoundReportPanel({
                   type="text"
                   value={nombreReportante}
                   onChange={(event) => setNombreReportante(event.target.value)}
-                  placeholder="Ej. Ana"
+                  placeholder="Ej. Alan"
                   className="w-full rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3.5 pr-11 text-sm text-white outline-none placeholder:text-white/30 focus:border-[#E8C547]/40"
                 />
                 <MessageSquareText className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
@@ -430,7 +430,7 @@ export default function FoundReportPanel({
                   type="text"
                   value={telefonoReportante}
                   onChange={(event) => setTelefonoReportante(event.target.value)}
-                  placeholder="Ej. 987654321"
+                  placeholder="Ej. 900000000"
                   className="w-full rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3.5 pr-11 text-sm text-white outline-none placeholder:text-white/30 focus:border-[#E8C547]/40"
                 />
                 <PhoneIcon className="pointer-events-none absolute right-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-white/35" />

@@ -70,6 +70,42 @@ function getPasswordStrength(password: string): PasswordStrength {
   };
 }
 
+function getSiteUrl() {
+  return import.meta.env.PROD
+    ? "https://www.mokkopet.com"
+    : "http://localhost:5173";
+}
+
+function getReadableAuthError(message: string) {
+  const normalized = message.trim().toLowerCase();
+
+  if (normalized.includes("email rate limit exceeded")) {
+    return "Has solicitado demasiados correos en poco tiempo. Espera unos minutos e inténtalo nuevamente.";
+  }
+
+  if (normalized.includes("user already registered")) {
+    return "Ese correo ya está registrado. Intenta iniciar sesión.";
+  }
+
+  if (normalized.includes("password should be at least")) {
+    return "La contraseña debe tener al menos 8 caracteres.";
+  }
+
+  if (normalized.includes("signup is disabled")) {
+    return "El registro está deshabilitado temporalmente.";
+  }
+
+  if (normalized.includes("unable to validate email address")) {
+    return "Ingresa un correo válido.";
+  }
+
+  if (normalized.includes("for security purposes")) {
+    return "Por seguridad, espera un momento antes de volver a intentarlo.";
+  }
+
+  return message;
+}
+
 export default function Register() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -117,10 +153,13 @@ export default function Register() {
         throw new Error("La contraseña debe tener al menos 8 caracteres.");
       }
 
+      const siteUrl = getSiteUrl();
+
       const { data, error } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
         options: {
+          emailRedirectTo: `${siteUrl}${next}`,
           data: {
             full_name: trimmedFullName,
           },
@@ -148,11 +187,11 @@ export default function Register() {
     } catch (err) {
       console.error("handleRegister error", err);
 
-      setErrorMsg(
-        err instanceof Error
-          ? err.message
-          : "Ocurrió un error inesperado al crear tu cuenta."
-      );
+      if (err instanceof Error) {
+        setErrorMsg(getReadableAuthError(err.message));
+      } else {
+        setErrorMsg("Ocurrió un error inesperado al crear tu cuenta.");
+      }
     } finally {
       setLoading(false);
     }
@@ -227,7 +266,7 @@ export default function Register() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
-                      placeholder="Jesús Huarcaya"
+                      placeholder="Jesús García"
                       required
                       disabled={isBusy}
                       autoComplete="name"

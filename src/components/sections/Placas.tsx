@@ -3,7 +3,7 @@ import { plans } from "../../data/plans";
 import type { Plan } from "../../types";
 
 const ALLY_WHATSAPP_URL =
-  "https://wa.me/51944606429?text=Hola,%20quiero%20ser%20aliado%20de%20Mokko.%20%C2%BFMe%20pueden%20dar%20informaci%C3%B3n%3F";
+  "https://wa.me/51906359973?text=Hola,%20quiero%20ser%20aliado%20de%20Mokko.%20%C2%BFMe%20pueden%20dar%20informaci%C3%B3n%3F";
 
 function getPlanAction(plan: Plan) {
   const normalizedId = String(plan.id).toLowerCase();

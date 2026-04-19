@@ -185,6 +185,10 @@ export default function MyAccount() {
     }));
   }, [level3Options]);
 
+  const displayEmail = useMemo(() => {
+    return email.trim() || user?.email || profile?.email || "Sin correo registrado";
+  }, [email, user?.email, profile?.email]);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user?.id) return;
@@ -307,7 +311,7 @@ export default function MyAccount() {
     return () => {
       isMounted = false;
     };
-  }, [authLoading, user?.id, user?.email, profile?.full_name]);
+  }, [authLoading, user?.id, user?.email, profile?.full_name, profile?.email]);
 
   useEffect(() => {
     if (!countryId && peruCountryId) {
@@ -503,7 +507,6 @@ export default function MyAccount() {
       const { error } = await supabase.from("profiles").upsert({
         id: profileId,
         full_name: fullName.trim() || null,
-        email: email.trim() || null,
         phone: normalizePhoneForStorage(phone, selectedCountryDialCode),
         whatsapp_phone: normalizePhoneForStorage(
           whatsappPhone,
@@ -627,19 +630,22 @@ export default function MyAccount() {
                       />
                     </div>
 
-                    <div>
-                      <FieldLabel>Correo</FieldLabel>
-                      <TextInput
-                        type="email"
-                        value={email}
-                        readOnly
-                        placeholder="tucorreo@ejemplo.com"
-                      />
-                      <p className="mt-2 text-xs text-white/45">
-                        El correo se muestra solo como referencia para mantenerlo
-                        alineado con tu cuenta de acceso.
-                      </p>
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <FieldLabel>Correo de acceso</FieldLabel>
+                      <span className="rounded-full border border-[#E8C547]/20 bg-[#E8C547]/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#f6df8a]">
+                        Vinculado a tu cuenta
+                      </span>
                     </div>
+
+                    <div className="rounded-2xl border border-[#E8C547]/18 bg-[#E8C547]/[0.06] px-4 py-4">
+                      <div className="text-base font-medium text-[#F5F0E8]">{displayEmail}</div>
+                    </div>
+
+                    <p className="mt-2 text-xs leading-6 text-white/45">
+                      Este correo está vinculado al acceso de tu cuenta y por ahora no se puede cambiar desde esta sección.
+                    </p>
+                  </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>

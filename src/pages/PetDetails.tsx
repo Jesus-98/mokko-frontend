@@ -75,6 +75,17 @@ function etiquetaEspecie(species: EspecieMascota | null): string {
   return "Mascota";
 }
 
+function etiquetaSexo(sex: string | null | undefined): string {
+  const valor = sex?.trim().toLowerCase();
+
+  if (!valor) return "No especificado";
+  if (valor === "male" || valor === "m" || valor === "macho") return "Macho";
+  if (valor === "female" || valor === "f" || valor === "hembra") return "Hembra";
+  if (valor === "unknown" || valor === "desconocido") return "No especificado";
+
+  return sex ?? "No especificado";
+}
+
 function etiquetaPlan(plan: PlanVendido | null | undefined): string {
   if (plan === "essential") return "Essential";
   if (plan === "custom") return "Custom";
@@ -83,7 +94,9 @@ function etiquetaPlan(plan: PlanVendido | null | undefined): string {
   return "No definido";
 }
 
-function etiquetaVisibilidad(visibilidad: EstadoVisibilidad | null | undefined): string {
+function etiquetaVisibilidad(
+  visibilidad: EstadoVisibilidad | null | undefined
+): string {
   if (visibilidad === "public") return "Público";
   if (visibilidad === "private") return "Privado";
   if (visibilidad === "lost_mode") return "Perdido";
@@ -266,6 +279,10 @@ export default function PetDetails() {
     return "No especificada";
   }, [mascota]);
 
+  const sexoTexto = useMemo(() => {
+    return etiquetaSexo(mascota?.sex);
+  }, [mascota?.sex]);
+
   const placaActivaPrincipal = useMemo(() => {
     return (
       placas.find((placa) => placa.status === "active" && placa.is_primary) ||
@@ -414,7 +431,7 @@ export default function PetDetails() {
                     <div className="mt-5 grid gap-4 sm:grid-cols-2">
                       <InfoCard label="Especie" value={etiquetaEspecie(mascota.species)} />
                       <InfoCard label="Raza" value={razaTexto} />
-                      <InfoCard label="Sexo" value={mascota.sex || "No especificado"} />
+                      <InfoCard label="Sexo" value={sexoTexto} />
                       <InfoCard label="Color" value={mascota.color || "No especificado"} />
                       <InfoCard
                         label="Fecha de nacimiento"
