@@ -17,6 +17,8 @@ type TagStatus =
   | "retired";
 
 type SoldPlanType = "essential" | "custom" | "partner_batch" | "other";
+type RowPlanValue = SoldPlanType | "";
+type ScanSource = "qr" | "nfc";
 
 type FabricationFilter = "all" | "fabricated" | "not_fabricated";
 type StatusFilter = "all" | TagStatus;
@@ -77,6 +79,14 @@ const PLAN_SEARCH_MAP: Array<{
     terms: ["partner", "partner_batch", "lote aliado", "aliado"],
   },
   { value: "other", terms: ["otro", "otros", "other"] },
+];
+
+const EDITABLE_PLAN_OPTIONS: CustomSelectOption[] = [
+  { value: "", label: "Selecciona plan" },
+  { value: "essential", label: "Essential" },
+  { value: "custom", label: "Custom" },
+  { value: "partner_batch", label: "Lote aliado" },
+  { value: "other", label: "Otro" },
 ];
 
 function csvEscape(value: unknown) {
@@ -246,11 +256,34 @@ function getMatchingPlans(search: string) {
   ).map((item) => item.value);
 }
 
+function isSoldPlanType(value: string): value is SoldPlanType {
+  return (
+    value === "essential" ||
+    value === "custom" ||
+    value === "partner_batch" ||
+    value === "other"
+  );
+}
+
+function canEditTagPlan(tag: TagRow) {
+  return tag.status === "available";
+}
+
+function buildTagPublicUrl(baseUrl: string, code: string, source?: ScanSource) {
+  const safeCode = encodeURIComponent(code.trim().toUpperCase());
+  const root = `${baseUrl}/p/${safeCode}`;
+
+  if (!source) return root;
+
+  return `${root}?source=${source}`;
+}
+
 export default function AdminTagsInventoryPage() {
   const { role, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [planSavingId, setPlanSavingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -583,6 +616,60 @@ export default function AdminTagsInventoryPage() {
     await updateFabricationState(false);
   };
 
+  const updateTagPlan = async (tag: TagRow, nextPlanValue: RowPlanValue) => {
+    if (!canEditTagPlan(tag)) {
+      setErrorMsg("Solo puedes cambiar el plan de placas disponibles.");
+      return;
+    }
+
+    if (!isSoldPlanType(nextPlanValue)) {
+      setErrorMsg("Selecciona un plan válido.");
+      return;
+    }
+
+    if (nextPlanValue === tag.sold_plan_type) {
+      return;
+    }
+
+    setPlanSavingId(tag.id);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const { error } = await supabase
+        .from("tags")
+        .update({
+          sold_plan_type: nextPlanValue,
+        })
+        .eq("id", tag.id)
+        .eq("status", "available");
+
+      if (error) throw error;
+
+      setTags((prev) =>
+        prev.map((row) =>
+          row.id === tag.id
+            ? {
+                ...row,
+                sold_plan_type: nextPlanValue,
+              }
+            : row
+        )
+      );
+
+      setSuccessMsg(`Plan actualizado a ${getPlanLabel(nextPlanValue)}.`);
+    } catch (error) {
+      console.error("AdminTagsInventoryPage plan update error:", error);
+      setErrorMsg(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar el plan de la placa."
+      );
+    } finally {
+      setPlanSavingId(null);
+    }
+  };
+
   const fetchSelectedTags = async (ids: string[]) => {
     const idChunks = chunkArray(ids, 500);
     const collected: TagRow[] = [];
@@ -638,7 +725,9 @@ export default function AdminTagsInventoryPage() {
       ];
 
       const rows = rowsToExport.map((tag) => {
-        const publicUrl = `${baseUrl}/p/${tag.code}`;
+        const publicUrl = buildTagPublicUrl(baseUrl, tag.code);
+        const qrUrl = buildTagPublicUrl(baseUrl, tag.code, "qr");
+        const nfcUrl = buildTagPublicUrl(baseUrl, tag.code, "nfc");
 
         return [
           tag.code,
@@ -648,8 +737,8 @@ export default function AdminTagsInventoryPage() {
           tag.fabricated_at || "",
           tag.created_at || "",
           publicUrl,
-          publicUrl,
-          publicUrl,
+          qrUrl,
+          nfcUrl,
         ];
       });
 
@@ -726,8 +815,9 @@ export default function AdminTagsInventoryPage() {
                   </h1>
 
                   <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Controla qué códigos ya están fabricados físicamente y cuáles
-                    aún no. Consulta el inventario por páginas, exporta lotes para
+                    Controla qué códigos ya están fabricados físicamente, cuáles
+                    aún no y ajusta el plan vendido solo en placas disponibles.
+                    Consulta el inventario por páginas, exporta lotes para
                     producción y evita vender códigos que todavía no tienes en
                     stock.
                   </p>
@@ -737,7 +827,7 @@ export default function AdminTagsInventoryPage() {
                   <button
                     type="button"
                     onClick={() => void exportCsv()}
-                    disabled={loading || actionLoading}
+                    disabled={loading || actionLoading || !!planSavingId}
                     className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Exportar CSV
@@ -746,7 +836,7 @@ export default function AdminTagsInventoryPage() {
                   <button
                     type="button"
                     onClick={() => void refreshAll()}
-                    disabled={loading || actionLoading}
+                    disabled={loading || actionLoading || !!planSavingId}
                     className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {loading ? "Actualizando..." : "Recargar inventario"}
@@ -903,7 +993,7 @@ export default function AdminTagsInventoryPage() {
                         <button
                           type="button"
                           onClick={() => void markSelectedAsFabricated()}
-                          disabled={actionLoading || selectedIds.length === 0}
+                          disabled={actionLoading || selectedIds.length === 0 || !!planSavingId}
                           className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Marcar seleccionadas como fabricadas
@@ -912,7 +1002,7 @@ export default function AdminTagsInventoryPage() {
                         <button
                           type="button"
                           onClick={() => void markSelectedAsNotFabricated()}
-                          disabled={actionLoading || selectedIds.length === 0}
+                          disabled={actionLoading || selectedIds.length === 0 || !!planSavingId}
                           className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Marcar seleccionadas como no fabricadas
@@ -958,49 +1048,72 @@ export default function AdminTagsInventoryPage() {
                         </thead>
 
                         <tbody>
-                          {tags.map((tag) => (
-                            <tr
-                              key={tag.id}
-                              className="border-b border-white/6 text-sm text-white/82 transition hover:bg-white/[0.03]"
-                            >
-                              <td className="px-4 py-4">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedIds.includes(tag.id)}
-                                  onChange={() => toggleSelect(tag.id)}
-                                  className="h-4 w-4 accent-[#E8C547]"
-                                />
-                              </td>
+                          {tags.map((tag) => {
+                            const editable = canEditTagPlan(tag);
 
-                              <td className="px-4 py-4 font-semibold text-[#F5F0E8]">
-                                {tag.code}
-                              </td>
+                            return (
+                              <tr
+                                key={tag.id}
+                                className="border-b border-white/6 text-sm text-white/82 transition hover:bg-white/[0.03]"
+                              >
+                                <td className="px-4 py-4">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedIds.includes(tag.id)}
+                                    onChange={() => toggleSelect(tag.id)}
+                                    className="h-4 w-4 accent-[#E8C547]"
+                                  />
+                                </td>
 
-                              <td className="px-4 py-4">
-                                <Badge variant={getPlanVariant(tag.sold_plan_type)}>
-                                  {getPlanLabel(tag.sold_plan_type)}
-                                </Badge>
-                              </td>
+                                <td className="px-4 py-4 font-semibold text-[#F5F0E8]">
+                                  {tag.code}
+                                </td>
 
-                              <td className="px-4 py-4">
-                                <Badge variant={getStatusVariant(tag.status)}>
-                                  {getStatusLabel(tag.status)}
-                                </Badge>
-                              </td>
+                                <td className="px-4 py-4">
+                                  {editable ? (
+                                    <div className="min-w-[220px]">
+                                      <CustomSelect
+                                        value={tag.sold_plan_type ?? ""}
+                                        onChange={(value) =>
+                                          void updateTagPlan(
+                                            tag,
+                                            value as RowPlanValue
+                                          )
+                                        }
+                                        options={EDITABLE_PLAN_OPTIONS}
+                                        placeholder="Selecciona plan"
+                                        disabled={
+                                          planSavingId === tag.id || actionLoading
+                                        }
+                                      />
+                                    </div>
+                                  ) : (
+                                    <Badge variant={getPlanVariant(tag.sold_plan_type)}>
+                                      {getPlanLabel(tag.sold_plan_type)}
+                                    </Badge>
+                                  )}
+                                </td>
 
-                              <td className="px-4 py-4">
-                                <Badge variant={tag.is_fabricated ? "success" : "muted"}>
-                                  {tag.is_fabricated
-                                    ? "Fabricada"
-                                    : "No fabricada"}
-                                </Badge>
-                              </td>
+                                <td className="px-4 py-4">
+                                  <Badge variant={getStatusVariant(tag.status)}>
+                                    {getStatusLabel(tag.status)}
+                                  </Badge>
+                                </td>
 
-                              <td className="px-4 py-4 text-white/70">
-                                {formatDateTime(tag.fabricated_at)}
-                              </td>
-                            </tr>
-                          ))}
+                                <td className="px-4 py-4">
+                                  <Badge variant={tag.is_fabricated ? "success" : "muted"}>
+                                    {tag.is_fabricated
+                                      ? "Fabricada"
+                                      : "No fabricada"}
+                                  </Badge>
+                                </td>
+
+                                <td className="px-4 py-4 text-white/70">
+                                  {formatDateTime(tag.fabricated_at)}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1112,8 +1225,9 @@ export default function AdminTagsInventoryPage() {
 
                 <div className="mx-auto mt-6 max-w-7xl rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-4 text-sm leading-7 text-[#f6df8a]">
                   Consejo operativo: para vender sin errores, prioriza códigos con{" "}
-                  <strong className="text-white">estado Disponible</strong> y{" "}
-                  <strong className="text-white">Fabricada</strong>.
+                  <strong className="text-white">estado Disponible</strong>,{" "}
+                  <strong className="text-white">Fabricada</strong> y ajusta el
+                  plan solo antes de activarlas.
                 </div>
               </>
             )}
