@@ -4,6 +4,7 @@ import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { buildWhatsAppUrl } from "../config/contact";
 
 type OrderStatus =
   | "draft"
@@ -383,7 +384,7 @@ export default function OrderDetail() {
       `Estado actual: ${getStatusLabel(order.status)}`,
     ].join("\n");
 
-    return `https://wa.me/51944606429?text=${encodeURIComponent(msg)}`;
+    return buildWhatsAppUrl(msg);
   }, [order]);
 
   const showLoading = authLoading || loading;

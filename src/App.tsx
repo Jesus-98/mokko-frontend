@@ -50,8 +50,8 @@ export default function App() {
       <Route path="/update-password" element={<UpdatePassword />} />
       <Route path="/privacidad" element={<PrivacyPolicy />} />
       <Route path="/terminos" element={<TermsConditions />} />
-      
-      {/* Perfil público (QR / NFC) */}
+
+      {/* Perfil público QR / NFC */}
       <Route path="/p/:code" element={<PublicProfile />} />
 
       {/* ================= CLIENT ================= */}
@@ -129,7 +129,15 @@ export default function App() {
         }
       />
 
-      <Route path="/mis-placas" element={<MyTagsPage />} />
+      {/* Placas del cliente */}
+      <Route
+        path="/mis-placas"
+        element={
+          <ProtectedRoute>
+            <MyTagsPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* ================= REPORTES ================= */}
       <Route
@@ -196,7 +204,14 @@ export default function App() {
         }
       />
 
-      <Route path="/admin/inventario-placas" element={<AdminTagsInventoryPage />} />
+      <Route
+        path="/admin/inventario-placas"
+        element={
+          <AdminRoute>
+            <AdminTagsInventoryPage />
+          </AdminRoute>
+        }
+      />
 
       {/* ================= FALLBACK ================= */}
       <Route path="*" element={<Navigate to="/" replace />} />

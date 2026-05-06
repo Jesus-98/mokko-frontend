@@ -6,6 +6,9 @@ import { useAuth } from "../../context/AuthContext";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../../components/ui/CustomSelect";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
+import AdminFlashMessages from "../../components/admin/AdminFlashMessages";
+import AdminAccessDenied from "../../components/admin/AdminAccessDenied";
 
 type RegistrationFilter =
   | "all"
@@ -16,6 +19,13 @@ type RegistrationFilter =
 
 type PetsFilter = "all" | "with_pets" | "without_pets";
 type ActiveTagsFilter = "all" | "with_active_tags" | "without_active_tags";
+
+type QuickFilter =
+  | "all"
+  | "with_email"
+  | "with_phone"
+  | "with_location"
+  | "with_active_tags";
 
 type UserRow = {
   id: string;
@@ -107,6 +117,20 @@ function formatCountLabel(count: number, singular: string, plural?: string) {
   return `${count} ${count === 1 ? singular : plural || `${singular}s`}`;
 }
 
+function hasText(value: string | null | undefined) {
+  return !!value?.trim();
+}
+
+function hasLocation(user: UserViewRow) {
+  return Boolean(
+    user.country_id ||
+      user.division_level_1_id ||
+      user.division_level_2_id ||
+      user.division_level_3_id ||
+      user.address_line?.trim()
+  );
+}
+
 function matchesRegistrationFilter(
   createdAt: string,
   filter: RegistrationFilter
@@ -146,6 +170,28 @@ function matchesRegistrationFilter(
     start.setHours(0, 0, 0, 0);
     start.setDate(start.getDate() - 29);
     return date >= start && date <= now;
+  }
+
+  return true;
+}
+
+function matchesQuickFilter(user: UserViewRow, filter: QuickFilter) {
+  if (filter === "all") return true;
+
+  if (filter === "with_email") {
+    return hasText(user.email);
+  }
+
+  if (filter === "with_phone") {
+    return hasText(user.whatsapp_phone) || hasText(user.phone);
+  }
+
+  if (filter === "with_location") {
+    return hasLocation(user);
+  }
+
+  if (filter === "with_active_tags") {
+    return user.active_tags_count > 0;
   }
 
   return true;
@@ -210,6 +256,7 @@ export default function AdminUsersPage() {
   const [petsFilter, setPetsFilter] = useState<PetsFilter>("all");
   const [activeTagsFilter, setActiveTagsFilter] =
     useState<ActiveTagsFilter>("all");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -427,15 +474,7 @@ export default function AdminUsersPage() {
   );
 
   const usersWithLocation = useMemo(
-    () =>
-      users.filter(
-        (user) =>
-          user.country_id ||
-          user.division_level_1_id ||
-          user.division_level_2_id ||
-          user.division_level_3_id ||
-          user.address_line
-      ).length,
+    () => users.filter((user) => hasLocation(user)).length,
     [users]
   );
 
@@ -564,15 +603,17 @@ export default function AdminUsersPage() {
         petsFilter === "all"
           ? true
           : petsFilter === "with_pets"
-          ? user.pets_count > 0
-          : user.pets_count === 0;
+            ? user.pets_count > 0
+            : user.pets_count === 0;
 
       const matchesActiveTags =
         activeTagsFilter === "all"
           ? true
           : activeTagsFilter === "with_active_tags"
-          ? user.active_tags_count > 0
-          : user.active_tags_count === 0;
+            ? user.active_tags_count > 0
+            : user.active_tags_count === 0;
+
+      const matchesQuick = matchesQuickFilter(user, quickFilter);
 
       const haystack = normalizeText(
         [
@@ -599,6 +640,7 @@ export default function AdminUsersPage() {
         matchesRegistration &&
         matchesPets &&
         matchesActiveTags &&
+        matchesQuick &&
         matchesSearch
       );
     });
@@ -612,6 +654,7 @@ export default function AdminUsersPage() {
     registrationFilter,
     petsFilter,
     activeTagsFilter,
+    quickFilter,
   ]);
 
   const totalPages = Math.max(
@@ -641,6 +684,7 @@ export default function AdminUsersPage() {
     registrationFilter,
     petsFilter,
     activeTagsFilter,
+    quickFilter,
   ]);
 
   useEffect(() => {
@@ -662,6 +706,7 @@ export default function AdminUsersPage() {
     setRegistrationFilter("all");
     setPetsFilter("all");
     setActiveTagsFilter("all");
+    setQuickFilter("all");
     setCurrentPage(1);
   };
 
@@ -746,14 +791,7 @@ export default function AdminUsersPage() {
         <Header />
 
         <main className="min-h-screen bg-[#1A1A14] text-white">
-          <section className="mokko-container py-12">
-            <div className="mx-auto max-w-4xl rounded-[32px] border border-red-400/20 bg-red-400/10 px-6 py-12">
-              <div className="text-2xl font-semibold">Acceso restringido</div>
-              <p className="mt-3 text-sm leading-7 text-red-200">
-                No tienes permisos para acceder a esta página.
-              </p>
-            </div>
-          </section>
+          <AdminAccessDenied message="No tienes permisos para acceder a la gestión de usuarios." />
         </main>
 
         <Footer />
@@ -771,61 +809,40 @@ export default function AdminUsersPage() {
 
           <div className="mokko-container relative z-10 py-10 md:py-14">
             <div className="mx-auto max-w-7xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Admin · Usuarios
-              </span>
+              <AdminPageHeader
+                badge="Admin · Usuarios"
+                title="Gestión de usuarios"
+                description="Revisa usuarios registrados, su ubicación, datos de contacto, mascotas registradas y placas activas."
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      onClick={exportCsv}
+                      disabled={loading || filteredUsers.length === 0}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Exportar CSV
+                    </button>
 
-              <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    Gestión de <span className="text-[#E8C547]">usuarios</span>
-                  </h1>
-
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Revisa usuarios registrados, su ubicación, datos de contacto,
-                    mascotas registradas y placas activas.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={exportCsv}
-                    disabled={loading || filteredUsers.length === 0}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Exportar CSV
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => void loadUsers()}
-                    disabled={loading}
-                    className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading ? "Actualizando..." : "Recargar usuarios"}
-                  </button>
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => void loadUsers()}
+                      disabled={loading}
+                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {loading ? "Actualizando..." : "Recargar usuarios"}
+                    </button>
+                  </>
+                }
+              />
             </div>
 
-            {errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                {errorMsg}
-              </div>
-            )}
-
-            {warningMsg && !errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                {warningMsg}
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                {successMsg}
-              </div>
-            )}
+            <AdminFlashMessages
+              success={successMsg}
+              error={errorMsg}
+              warning={errorMsg ? "" : warningMsg}
+              className="mx-auto mt-8 max-w-7xl"
+            />
 
             {loading ? (
               <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
@@ -838,26 +855,40 @@ export default function AdminUsersPage() {
                     label="Total usuarios"
                     value={totalUsers}
                     variant="green"
+                    active={quickFilter === "all"}
+                    onClick={() => setQuickFilter("all")}
                   />
+
                   <StatCard
                     label="Con correo"
                     value={usersWithEmail}
                     variant="neutral"
+                    active={quickFilter === "with_email"}
+                    onClick={() => setQuickFilter("with_email")}
                   />
+
                   <StatCard
                     label="Con WhatsApp / teléfono"
                     value={usersWithWhatsApp}
                     variant="yellow"
+                    active={quickFilter === "with_phone"}
+                    onClick={() => setQuickFilter("with_phone")}
                   />
+
                   <StatCard
                     label="Con ubicación"
                     value={usersWithLocation}
                     variant="neutral"
+                    active={quickFilter === "with_location"}
+                    onClick={() => setQuickFilter("with_location")}
                   />
+
                   <StatCard
                     label="Con placas activas"
                     value={usersWithActiveTags}
                     variant="yellow"
+                    active={quickFilter === "with_active_tags"}
+                    onClick={() => setQuickFilter("with_active_tags")}
                   />
                 </div>
 
@@ -1316,24 +1347,52 @@ function StatCard({
   label,
   value,
   variant,
+  active = false,
+  onClick,
 }: {
   label: string;
   value: number;
   variant: "green" | "yellow" | "neutral";
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const variantClass =
     variant === "green"
-      ? "border-[#2D5A27]/60 bg-[#12311c]"
+      ? active
+        ? "border-[#2D5A27]/70 bg-[#12311c]"
+        : "border-[#2D5A27]/60 bg-[#12311c]"
       : variant === "yellow"
-      ? "border-[#E8C547]/15 bg-[#E8C547]/8"
-      : "border-white/8 bg-white/[0.04]";
+        ? active
+          ? "border-[#E8C547]/25 bg-[#E8C547]/10"
+          : "border-[#E8C547]/15 bg-[#E8C547]/8"
+        : active
+          ? "border-[#E8C547]/20 bg-[#E8C547]/8"
+          : "border-white/8 bg-white/[0.04]";
 
-  return (
-    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
+  const content = (
+    <>
       <div className="text-sm uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
       <div className="mt-3 text-4xl font-semibold text-[#E8C547]">{value}</div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`rounded-[28px] border p-6 text-left transition hover:-translate-y-[1px] ${variantClass}`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
+      {content}
     </div>
   );
 }

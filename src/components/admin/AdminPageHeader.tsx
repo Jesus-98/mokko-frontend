@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Button from "../ui/Button";
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;
   disabled?: boolean;
+  actions?: ReactNode;
 };
 
 export default function AdminPageHeader({
@@ -20,6 +22,7 @@ export default function AdminPageHeader({
   secondaryActionLabel,
   onSecondaryAction,
   disabled = false,
+  actions,
 }: Props) {
   return (
     <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -37,7 +40,9 @@ export default function AdminPageHeader({
         )}
       </div>
 
-      {(primaryActionLabel || secondaryActionLabel) && (
+      {actions ? (
+        <div className="flex flex-wrap gap-3">{actions}</div>
+      ) : (primaryActionLabel || secondaryActionLabel) ? (
         <div className="flex flex-wrap gap-3">
           {secondaryActionLabel && onSecondaryAction && (
             <Button
@@ -60,7 +65,7 @@ export default function AdminPageHeader({
             </Button>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

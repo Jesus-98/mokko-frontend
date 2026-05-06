@@ -7,6 +7,9 @@ import CustomSelect, {
   type CustomSelectOption,
 } from "../../components/ui/CustomSelect";
 import Badge from "../../components/ui/Badge";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
+import AdminFlashMessages from "../../components/admin/AdminFlashMessages";
+import AdminAccessDenied from "../../components/admin/AdminAccessDenied";
 
 type TagStatus =
   | "available"
@@ -23,6 +26,13 @@ type ScanSource = "qr" | "nfc";
 type FabricationFilter = "all" | "fabricated" | "not_fabricated";
 type StatusFilter = "all" | TagStatus;
 type PlanFilter = "all" | SoldPlanType;
+
+type QuickFilter =
+  | "all"
+  | "fabricated"
+  | "not_fabricated"
+  | "ready_to_sell"
+  | "activated";
 
 type TagRow = {
   id: string;
@@ -296,6 +306,7 @@ export default function AdminTagsInventoryPage() {
     useState<FabricationFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -424,6 +435,16 @@ export default function AdminTagsInventoryPage() {
         )
         .order("code", { ascending: true });
 
+      if (quickFilter === "fabricated") {
+        query = query.eq("is_fabricated", true);
+      } else if (quickFilter === "not_fabricated") {
+        query = query.eq("is_fabricated", false);
+      } else if (quickFilter === "ready_to_sell") {
+        query = query.eq("status", "available").eq("is_fabricated", true);
+      } else if (quickFilter === "activated") {
+        query = query.eq("status", "activated");
+      }
+
       if (fabricationFilter === "fabricated") {
         query = query.eq("is_fabricated", true);
       } else if (fabricationFilter === "not_fabricated") {
@@ -484,6 +505,7 @@ export default function AdminTagsInventoryPage() {
     fabricationFilter,
     statusFilter,
     planFilter,
+    quickFilter,
     searchTerm,
     currentPage,
     pageSize,
@@ -508,7 +530,14 @@ export default function AdminTagsInventoryPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, fabricationFilter, statusFilter, planFilter, pageSize]);
+  }, [
+    searchTerm,
+    fabricationFilter,
+    statusFilter,
+    planFilter,
+    quickFilter,
+    pageSize,
+  ]);
 
   useEffect(() => {
     setGoToPageInput(String(currentPage));
@@ -526,6 +555,7 @@ export default function AdminTagsInventoryPage() {
     setFabricationFilter("all");
     setStatusFilter("all");
     setPlanFilter("all");
+    setQuickFilter("all");
     setCurrentPage(1);
   };
 
@@ -779,14 +809,7 @@ export default function AdminTagsInventoryPage() {
         <Header />
 
         <main className="min-h-screen bg-[#1A1A14] text-white">
-          <section className="mokko-container py-12">
-            <div className="mx-auto max-w-4xl rounded-[32px] border border-red-400/20 bg-red-400/10 px-6 py-12">
-              <div className="text-2xl font-semibold">Acceso restringido</div>
-              <p className="mt-3 text-sm leading-7 text-red-200">
-                No tienes permisos para acceder a esta página.
-              </p>
-            </div>
-          </section>
+          <AdminAccessDenied message="No tienes permisos para acceder al inventario de placas." />
         </main>
 
         <Footer />
@@ -804,58 +827,39 @@ export default function AdminTagsInventoryPage() {
 
           <div className="mokko-container relative z-10 py-10 md:py-14">
             <div className="mx-auto max-w-7xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Admin · Inventario de placas
-              </span>
+              <AdminPageHeader
+                badge="Admin · Inventario de placas"
+                title="Inventario de placas"
+                description="Controla qué códigos ya están fabricados físicamente, cuáles aún no y ajusta el plan vendido solo en placas disponibles. Consulta el inventario por páginas, exporta lotes para producción y evita vender códigos que todavía no tienes en stock."
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void exportCsv()}
+                      disabled={loading || actionLoading || !!planSavingId}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Exportar CSV
+                    </button>
 
-              <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    Inventario de <span className="text-[#E8C547]">placas</span>
-                  </h1>
-
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Controla qué códigos ya están fabricados físicamente, cuáles
-                    aún no y ajusta el plan vendido solo en placas disponibles.
-                    Consulta el inventario por páginas, exporta lotes para
-                    producción y evita vender códigos que todavía no tienes en
-                    stock.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => void exportCsv()}
-                    disabled={loading || actionLoading || !!planSavingId}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Exportar CSV
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => void refreshAll()}
-                    disabled={loading || actionLoading || !!planSavingId}
-                    className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading ? "Actualizando..." : "Recargar inventario"}
-                  </button>
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => void refreshAll()}
+                      disabled={loading || actionLoading || !!planSavingId}
+                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {loading ? "Actualizando..." : "Recargar inventario"}
+                    </button>
+                  </>
+                }
+              />
             </div>
 
-            {errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                {errorMsg}
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                {successMsg}
-              </div>
-            )}
+            <AdminFlashMessages
+              success={successMsg}
+              error={errorMsg}
+              className="mx-auto mt-8 max-w-7xl"
+            />
 
             {loading ? (
               <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
@@ -868,26 +872,40 @@ export default function AdminTagsInventoryPage() {
                     label="Total códigos"
                     value={summary.totalTags}
                     variant="green"
+                    active={quickFilter === "all"}
+                    onClick={() => setQuickFilter("all")}
                   />
+
                   <StatCard
                     label="Fabricadas"
                     value={summary.fabricatedCount}
                     variant="neutral"
+                    active={quickFilter === "fabricated"}
+                    onClick={() => setQuickFilter("fabricated")}
                   />
+
                   <StatCard
                     label="No fabricadas"
                     value={summary.notFabricatedCount}
                     variant="yellow"
+                    active={quickFilter === "not_fabricated"}
+                    onClick={() => setQuickFilter("not_fabricated")}
                   />
+
                   <StatCard
                     label="Listas para vender"
                     value={summary.readyToSellCount}
                     variant="green"
+                    active={quickFilter === "ready_to_sell"}
+                    onClick={() => setQuickFilter("ready_to_sell")}
                   />
+
                   <StatCard
                     label="Activadas"
                     value={summary.activatedCount}
                     variant="neutral"
+                    active={quickFilter === "activated"}
+                    onClick={() => setQuickFilter("activated")}
                   />
                 </div>
 
@@ -1244,24 +1262,52 @@ function StatCard({
   label,
   value,
   variant,
+  active = false,
+  onClick,
 }: {
   label: string;
   value: number;
   variant: "green" | "yellow" | "neutral";
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const variantClass =
     variant === "green"
-      ? "border-[#2D5A27]/60 bg-[#12311c]"
+      ? active
+        ? "border-[#2D5A27]/70 bg-[#12311c]"
+        : "border-[#2D5A27]/60 bg-[#12311c]"
       : variant === "yellow"
-      ? "border-[#E8C547]/15 bg-[#E8C547]/8"
+      ? active
+        ? "border-[#E8C547]/25 bg-[#E8C547]/10"
+        : "border-[#E8C547]/15 bg-[#E8C547]/8"
+      : active
+      ? "border-[#E8C547]/20 bg-[#E8C547]/8"
       : "border-white/8 bg-white/[0.04]";
 
-  return (
-    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
+  const content = (
+    <>
       <div className="text-sm uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
       <div className="mt-3 text-4xl font-semibold text-[#E8C547]">{value}</div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`rounded-[28px] border p-6 text-left transition hover:-translate-y-[1px] ${variantClass}`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
+      {content}
     </div>
   );
 }

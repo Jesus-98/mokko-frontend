@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { faqs } from "../../data/faqs";
+import { SUPPORT_WHATSAPP_URLS } from "../../config/contact";
 
 export default function FAQ() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -59,7 +60,7 @@ export default function FAQ() {
           <p className="text-white/70">
             ¿Tenés otra consulta?{" "}
             <a
-              href="https://wa.me/51906359973?text=Hola%20Mokko%2C%20tengo%20una%20consulta%20sobre%20sus%20placas%20inteligentes."
+              href={SUPPORT_WHATSAPP_URLS.support}
               target="_blank"
               rel="noreferrer"
               className="font-semibold text-[#E8C547] transition hover:underline"

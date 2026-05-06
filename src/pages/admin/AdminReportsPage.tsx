@@ -6,9 +6,18 @@ import { useAuth } from "../../context/AuthContext";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../../components/ui/CustomSelect";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
+import AdminFlashMessages from "../../components/admin/AdminFlashMessages";
+import AdminAccessDenied from "../../components/admin/AdminAccessDenied";
 
 type ReportStatus = "new" | "viewed" | "resolved" | "dismissed";
-type QuickFilter = "all" | "new" | "viewed" | "resolved" | "dismissed";
+type QuickFilter =
+  | "all"
+  | "new"
+  | "viewed"
+  | "resolved"
+  | "dismissed"
+  | "with_location";
 type PresenceFilter = "all" | "with_value" | "without_value";
 type LinkFilter = "all" | "with_pet" | "only_tag";
 
@@ -126,11 +135,17 @@ function matchesLinkFilter(petId: string | null, filter: LinkFilter) {
   return true;
 }
 
-function isWithinDateRange(
-  value: string,
-  dateFrom: string,
-  dateTo: string
-) {
+function matchesQuickFilter(report: ReportRow, filter: QuickFilter) {
+  if (filter === "all") return true;
+
+  if (filter === "with_location") {
+    return hasText(report.location_text);
+  }
+
+  return report.status === filter;
+}
+
+function isWithinDateRange(value: string, dateFrom: string, dateTo: string) {
   const createdAt = new Date(value);
   if (Number.isNaN(createdAt.getTime())) return false;
 
@@ -197,8 +212,7 @@ export default function AdminReportsPage() {
 
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [locationFilter, setLocationFilter] =
-    useState<PresenceFilter>("all");
+  const [locationFilter, setLocationFilter] = useState<PresenceFilter>("all");
   const [phoneFilter, setPhoneFilter] = useState<PresenceFilter>("all");
   const [linkFilter, setLinkFilter] = useState<LinkFilter>("all");
 
@@ -331,8 +345,7 @@ export default function AdminReportsPage() {
       const matchesStatus =
         statusFilter === "all" ? true : report.status === statusFilter;
 
-      const matchesQuickFilter =
-        quickFilter === "all" ? true : report.status === quickFilter;
+      const matchesQuick = matchesQuickFilter(report, quickFilter);
 
       const matchesSearch = term
         ? normalizeText(
@@ -369,7 +382,7 @@ export default function AdminReportsPage() {
 
       return (
         matchesStatus &&
-        matchesQuickFilter &&
+        matchesQuick &&
         matchesSearch &&
         matchesDate &&
         matchesLocation &&
@@ -483,8 +496,8 @@ export default function AdminReportsPage() {
                   nextStatus === "resolved"
                     ? nowIso
                     : nextStatus === "dismissed"
-                    ? null
-                    : report.resolved_at,
+                      ? null
+                      : report.resolved_at,
               }
             : report
         )
@@ -599,14 +612,7 @@ export default function AdminReportsPage() {
         <Header />
 
         <main className="min-h-screen bg-[#1A1A14] text-white">
-          <section className="mokko-container py-12">
-            <div className="mx-auto max-w-4xl rounded-[32px] border border-red-400/20 bg-red-400/10 px-6 py-12">
-              <div className="text-2xl font-semibold">Acceso restringido</div>
-              <p className="mt-3 text-sm leading-7 text-red-200">
-                No tienes permisos para acceder a esta página.
-              </p>
-            </div>
-          </section>
+          <AdminAccessDenied message="No tienes permisos para acceder a la gestión de reportes." />
         </main>
 
         <Footer />
@@ -624,55 +630,39 @@ export default function AdminReportsPage() {
 
           <div className="mokko-container relative z-10 py-10 md:py-14">
             <div className="mx-auto max-w-7xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Admin · Reportes
-              </span>
+              <AdminPageHeader
+                badge="Admin · Reportes"
+                title="Gestión de reportes"
+                description="Revisa reportes nuevos, reportantes, ubicaciones y cambia el estado de atención desde el panel admin."
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      onClick={exportCsv}
+                      disabled={loading || filteredReports.length === 0}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Exportar CSV
+                    </button>
 
-              <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    Gestión de <span className="text-[#E8C547]">reportes</span>
-                  </h1>
-
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Revisa reportes nuevos, reportantes, ubicaciones y cambia el
-                    estado de atención desde el panel admin.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={exportCsv}
-                    disabled={loading || filteredReports.length === 0}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Exportar CSV
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => void loadReports()}
-                    disabled={loading}
-                    className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading ? "Actualizando..." : "Recargar reportes"}
-                  </button>
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => void loadReports()}
+                      disabled={loading}
+                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {loading ? "Actualizando..." : "Recargar reportes"}
+                    </button>
+                  </>
+                }
+              />
             </div>
 
-            {errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                {errorMsg}
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                {successMsg}
-              </div>
-            )}
+            <AdminFlashMessages
+              success={successMsg}
+              error={errorMsg}
+              className="mx-auto mt-8 max-w-7xl"
+            />
 
             {loading ? (
               <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
@@ -688,6 +678,7 @@ export default function AdminReportsPage() {
                     variant={quickFilter === "all" ? "yellow" : "neutral"}
                     onClick={() => setQuickFilter("all")}
                   />
+
                   <StatCard
                     label="Nuevos"
                     value={newReports}
@@ -695,6 +686,7 @@ export default function AdminReportsPage() {
                     variant="yellow"
                     onClick={() => setQuickFilter("new")}
                   />
+
                   <StatCard
                     label="Vistos"
                     value={viewedReports}
@@ -702,6 +694,7 @@ export default function AdminReportsPage() {
                     variant="neutral"
                     onClick={() => setQuickFilter("viewed")}
                   />
+
                   <StatCard
                     label="Resueltos"
                     value={resolvedReports}
@@ -709,6 +702,7 @@ export default function AdminReportsPage() {
                     variant="green"
                     onClick={() => setQuickFilter("resolved")}
                   />
+
                   <StatCard
                     label="Descartados"
                     value={dismissedReports}
@@ -716,11 +710,13 @@ export default function AdminReportsPage() {
                     variant="danger"
                     onClick={() => setQuickFilter("dismissed")}
                   />
+
                   <StatCard
                     label="Con ubicación"
                     value={reportsWithLocation}
-                    active={false}
+                    active={quickFilter === "with_location"}
                     variant="neutral"
+                    onClick={() => setQuickFilter("with_location")}
                   />
                 </div>
 
@@ -832,9 +828,8 @@ export default function AdminReportsPage() {
 
                   <div className="mt-4 text-sm text-white/50">
                     Mostrando {filteredReports.length} reporte
-                    {filteredReports.length === 1 ? "" : "s"}.
-                    {" "}Con teléfono: {reportsWithPhone}.{" "}
-                    Con ubicación: {reportsWithLocation}.
+                    {filteredReports.length === 1 ? "" : "s"}. Con teléfono:{" "}
+                    {reportsWithPhone}. Con ubicación: {reportsWithLocation}.
                   </div>
                 </div>
 
@@ -845,7 +840,8 @@ export default function AdminReportsPage() {
                         No se encontraron reportes
                       </div>
                       <p className="mt-3 text-sm leading-7 text-white/65">
-                        Ajusta la búsqueda o los filtros para ver otros resultados.
+                        Ajusta la búsqueda o los filtros para ver otros
+                        resultados.
                       </p>
                     </div>
                   ) : (
@@ -882,23 +878,34 @@ export default function AdminReportsPage() {
                                   <span className="text-white/40">Fecha:</span>{" "}
                                   {formatDateTime(report.created_at)}
                                 </div>
+
                                 <div>
-                                  <span className="text-white/40">Reportante:</span>{" "}
+                                  <span className="text-white/40">
+                                    Reportante:
+                                  </span>{" "}
                                   {report.reporter_name || "—"}
                                 </div>
+
                                 <div>
-                                  <span className="text-white/40">Teléfono:</span>{" "}
+                                  <span className="text-white/40">
+                                    Teléfono:
+                                  </span>{" "}
                                   {report.reporter_phone || "—"}
                                 </div>
+
                                 <div>
-                                  <span className="text-white/40">Mascota:</span>{" "}
+                                  <span className="text-white/40">
+                                    Mascota:
+                                  </span>{" "}
                                   {pet?.name || "No vinculada"}
                                 </div>
                               </div>
 
                               {report.location_text && (
                                 <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm text-white/70">
-                                  <span className="text-white/45">Ubicación:</span>{" "}
+                                  <span className="text-white/45">
+                                    Ubicación:
+                                  </span>{" "}
                                   {report.location_text}
                                 </div>
                               )}
@@ -931,8 +938,14 @@ export default function AdminReportsPage() {
 
                               {expandedReportId === report.id && (
                                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                  <InfoBox label="ID reporte" value={report.id} />
-                                  <InfoBox label="ID placa" value={report.tag_id} />
+                                  <InfoBox
+                                    label="ID reporte"
+                                    value={report.id}
+                                  />
+                                  <InfoBox
+                                    label="ID placa"
+                                    value={report.tag_id}
+                                  />
                                   <InfoBox
                                     label="ID mascota"
                                     value={report.pet_id || "No asociado"}
@@ -990,9 +1003,19 @@ export default function AdminReportsPage() {
 
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      void navigator.clipboard.writeText(report.id);
-                                      setSuccessMsg("ID de reporte copiado correctamente.");
+                                    onClick={async () => {
+                                      try {
+                                        await navigator.clipboard.writeText(
+                                          report.id
+                                        );
+                                        setSuccessMsg(
+                                          "ID de reporte copiado correctamente."
+                                        );
+                                      } catch {
+                                        setErrorMsg(
+                                          "No se pudo copiar el ID del reporte."
+                                        );
+                                      }
                                     }}
                                     className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
                                   >
@@ -1002,9 +1025,19 @@ export default function AdminReportsPage() {
                                   {tag?.code ? (
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        void navigator.clipboard.writeText(tag.code);
-                                        setSuccessMsg("Código de placa copiado correctamente.");
+                                      onClick={async () => {
+                                        try {
+                                          await navigator.clipboard.writeText(
+                                            tag.code
+                                          );
+                                          setSuccessMsg(
+                                            "Código de placa copiado correctamente."
+                                          );
+                                        } catch {
+                                          setErrorMsg(
+                                            "No se pudo copiar el código de placa."
+                                          );
+                                        }
                                       }}
                                       className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
                                     >
@@ -1090,7 +1123,9 @@ export default function AdminReportsPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                            setCurrentPage((prev) =>
+                              Math.min(totalPages, prev + 1)
+                            )
                           }
                           disabled={currentPage === totalPages}
                           className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1111,7 +1146,9 @@ export default function AdminReportsPage() {
 
                     <div className="mt-4 border-t border-white/10 pt-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <label className="text-sm text-white/60">Ir a página</label>
+                        <label className="text-sm text-white/60">
+                          Ir a página
+                        </label>
 
                         <input
                           type="number"
@@ -1168,16 +1205,16 @@ function StatCard({
         ? "border-[#2D5A27]/70 bg-[#12311c]"
         : "border-[#2D5A27]/60 bg-[#12311c]"
       : variant === "yellow"
-      ? active
-        ? "border-[#E8C547]/25 bg-[#E8C547]/10"
-        : "border-[#E8C547]/15 bg-[#E8C547]/8"
-      : variant === "danger"
-      ? active
-        ? "border-red-400/30 bg-red-400/10"
-        : "border-white/8 bg-white/[0.04]"
-      : active
-      ? "border-[#E8C547]/20 bg-[#E8C547]/8"
-      : "border-white/8 bg-white/[0.04]";
+        ? active
+          ? "border-[#E8C547]/25 bg-[#E8C547]/10"
+          : "border-[#E8C547]/15 bg-[#E8C547]/8"
+        : variant === "danger"
+          ? active
+            ? "border-red-400/30 bg-red-400/10"
+            : "border-white/8 bg-white/[0.04]"
+          : active
+            ? "border-[#E8C547]/20 bg-[#E8C547]/8"
+            : "border-white/8 bg-white/[0.04]";
 
   const content = (
     <>
@@ -1200,16 +1237,14 @@ function StatCard({
     );
   }
 
-  return <div className={`rounded-[28px] border p-6 ${variantClass}`}>{content}</div>;
+  return (
+    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
+      {content}
+    </div>
+  );
 }
 
-function InfoBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function InfoBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
       <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">

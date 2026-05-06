@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { navLinks } from "../../data/navigation";
@@ -86,6 +86,7 @@ export default function Header() {
     };
 
     document.addEventListener("mousedown", onClickOutside);
+
     return () => {
       document.removeEventListener("mousedown", onClickOutside);
     };
@@ -106,9 +107,11 @@ export default function Header() {
 
     if (location.pathname !== "/") {
       navigate("/");
+
       window.setTimeout(() => {
         document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
       }, 150);
+
       closeMenus();
       return;
     }
@@ -143,36 +146,32 @@ export default function Header() {
     role === "admin"
       ? "Admin"
       : role === "partner"
-      ? "Partner"
-      : role === "customer"
-      ? "Cliente"
-      : "";
+        ? "Aliado"
+        : role === "customer"
+          ? "Cliente"
+          : "";
 
-  const accountActions = useMemo<AccountAction[]>(() => {
-    const actions: AccountAction[] = [
-      { label: "Mi dashboard", onClick: () => goTo("/dashboard") },
-      { label: "Mis mascotas", onClick: () => goTo("/mis-mascotas") },
-      { label: "Mis placas", onClick: () => goTo("/mis-placas") },
-      { label: "Mis reportes", onClick: () => goTo("/mis-reportes") },
-      { label: "Mis pedidos", onClick: () => goTo("/mis-pedidos") },
-      { label: "Mis datos", onClick: () => goTo("/my-account") },
-    ];
+  const accountActions: AccountAction[] = [
+    { label: "Mi dashboard", onClick: () => goTo("/dashboard") },
+    { label: "Mis mascotas", onClick: () => goTo("/mis-mascotas") },
+    { label: "Mis placas", onClick: () => goTo("/mis-placas") },
+    { label: "Mis reportes", onClick: () => goTo("/mis-reportes") },
+    { label: "Mis pedidos", onClick: () => goTo("/mis-pedidos") },
+    { label: "Mis datos", onClick: () => goTo("/my-account") },
+  ];
 
-    if (isAdmin) {
-      actions.splice(5, 0, {
-        label: "Panel admin",
-        onClick: () => goTo("/admin"),
-      });
-    }
-
-    actions.push({
-      label: "Cerrar sesión",
-      onClick: handleLogout,
-      danger: true,
+  if (isAdmin) {
+    accountActions.splice(5, 0, {
+      label: "Panel admin",
+      onClick: () => goTo("/admin"),
     });
+  }
 
-    return actions;
-  }, [isAdmin]);
+  accountActions.push({
+    label: "Cerrar sesión",
+    onClick: handleLogout,
+    danger: true,
+  });
 
   return (
     <header
@@ -202,6 +201,7 @@ export default function Header() {
                   href={link.url}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={closeMenus}
                   className="relative rounded-xl px-4 py-2 text-sm text-white/60 transition hover:bg-white/5 hover:text-white"
                 >
                   {link.label}
@@ -246,7 +246,7 @@ export default function Header() {
             <>
               <button
                 type="button"
-                onClick={() => navigate("/login")}
+                onClick={() => goTo("/login")}
                 className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-medium text-white/85 transition hover:bg-white/5"
               >
                 Ingresar
@@ -254,7 +254,7 @@ export default function Header() {
 
               <button
                 type="button"
-                onClick={() => navigate("/activar")}
+                onClick={() => goTo("/activar")}
                 className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
               >
                 Activar mi placa
@@ -301,6 +301,7 @@ export default function Header() {
                         <button
                           key={action.label}
                           type="button"
+                          role="menuitem"
                           onClick={action.onClick}
                           className={`rounded-xl px-3 py-3 text-left text-sm transition ${
                             action.danger
@@ -318,7 +319,7 @@ export default function Header() {
 
               <button
                 type="button"
-                onClick={() => navigate("/activar")}
+                onClick={() => goTo("/activar")}
                 className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
               >
                 Activar mi placa
@@ -368,6 +369,7 @@ export default function Header() {
                   href={link.url}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={closeMenus}
                   className="rounded-2xl px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/5 hover:text-white"
                 >
                   {link.label}

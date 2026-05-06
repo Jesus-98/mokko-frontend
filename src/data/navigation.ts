@@ -1,3 +1,5 @@
+import { SUPPORT_WHATSAPP_URLS } from "../config/contact";
+
 export type NavLink = {
   label: string;
   href?: string;
@@ -11,7 +13,7 @@ export const navLinks: NavLink[] = [
   {
     label: "Aliados",
     type: "external",
-    url: "https://wa.me/51906359973?text=Hola%2C%20quiero%20informaci%C3%B3n%20para%20ser%20aliado%20de%20Mokko.",
+    url: SUPPORT_WHATSAPP_URLS.ally,
   },
   { label: "Ayuda / FAQ", href: "#faq", type: "section" },
 ];

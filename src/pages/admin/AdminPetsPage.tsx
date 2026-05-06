@@ -6,12 +6,16 @@ import { useAuth } from "../../context/AuthContext";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../../components/ui/CustomSelect";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
+import AdminFlashMessages from "../../components/admin/AdminFlashMessages";
+import AdminAccessDenied from "../../components/admin/AdminAccessDenied";
 
 type PetStatusFilter = "all" | "active" | "inactive";
 type SpeciesFilter = "all" | "dog" | "cat" | "other";
 type VisibilityStatus = "public" | "private" | "lost_mode";
 type VisibilityFilter = "all" | VisibilityStatus | "no_profile";
 type MedicalFilter = "all" | "enabled";
+type QuickFilter = "all" | "active" | "lost_mode" | "medical" | "no_profile";
 
 type SoldPlanType = "essential" | "custom" | "partner_batch" | "other";
 type RelationValue<T> = T | T[] | null;
@@ -299,6 +303,30 @@ function hasMedicalRecord(pet: PetRow) {
   return !!publicProfile?.medical_profile_enabled || !!medicalProfile?.pet_id;
 }
 
+function matchesQuickFilter(pet: PetRow, filter: QuickFilter) {
+  const publicProfile = getPublicProfile(pet);
+
+  if (filter === "all") return true;
+
+  if (filter === "active") {
+    return pet.is_active;
+  }
+
+  if (filter === "lost_mode") {
+    return publicProfile?.visibility_status === "lost_mode";
+  }
+
+  if (filter === "medical") {
+    return hasMedicalRecord(pet);
+  }
+
+  if (filter === "no_profile") {
+    return !publicProfile;
+  }
+
+  return true;
+}
+
 function buildPagination(currentPage: number, totalPages: number) {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -423,6 +451,7 @@ export default function AdminPetsPage() {
   const [visibilityFilter, setVisibilityFilter] =
     useState<VisibilityFilter>("all");
   const [medicalFilter, setMedicalFilter] = useState<MedicalFilter>("all");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -658,18 +687,20 @@ export default function AdminPetsPage() {
         statusFilter === "all"
           ? true
           : statusFilter === "active"
-          ? pet.is_active
-          : !pet.is_active;
+            ? pet.is_active
+            : !pet.is_active;
 
       const matchesVisibility =
         visibilityFilter === "all"
           ? true
           : visibilityFilter === "no_profile"
-          ? !publicProfile
-          : publicProfile?.visibility_status === visibilityFilter;
+            ? !publicProfile
+            : publicProfile?.visibility_status === visibilityFilter;
 
       const matchesMedical =
         medicalFilter === "enabled" ? medicalEnabled : true;
+
+      const matchesQuick = matchesQuickFilter(pet, quickFilter);
 
       const haystack = normalizeText(
         [
@@ -695,6 +726,7 @@ export default function AdminPetsPage() {
         matchesStatus &&
         matchesVisibility &&
         matchesMedical &&
+        matchesQuick &&
         matchesSearch
       );
     });
@@ -705,6 +737,7 @@ export default function AdminPetsPage() {
     statusFilter,
     visibilityFilter,
     medicalFilter,
+    quickFilter,
     vaccinationsByPetId,
   ]);
 
@@ -726,7 +759,14 @@ export default function AdminPetsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, speciesFilter, statusFilter, visibilityFilter, medicalFilter]);
+  }, [
+    searchTerm,
+    speciesFilter,
+    statusFilter,
+    visibilityFilter,
+    medicalFilter,
+    quickFilter,
+  ]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -744,6 +784,7 @@ export default function AdminPetsPage() {
     setStatusFilter("all");
     setVisibilityFilter("all");
     setMedicalFilter("all");
+    setQuickFilter("all");
     setCurrentPage(1);
   };
 
@@ -843,14 +884,7 @@ export default function AdminPetsPage() {
         <Header />
 
         <main className="min-h-screen bg-[#1A1A14] text-white">
-          <section className="mokko-container py-12">
-            <div className="mx-auto max-w-4xl rounded-[32px] border border-red-400/20 bg-red-400/10 px-6 py-12">
-              <div className="text-2xl font-semibold">Acceso restringido</div>
-              <p className="mt-3 text-sm leading-7 text-red-200">
-                No tienes permisos para acceder a esta página.
-              </p>
-            </div>
-          </section>
+          <AdminAccessDenied message="No tienes permisos para acceder a la gestión de mascotas." />
         </main>
 
         <Footer />
@@ -868,62 +902,40 @@ export default function AdminPetsPage() {
 
           <div className="mokko-container relative z-10 py-10 md:py-14">
             <div className="mx-auto max-w-7xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Admin · Mascotas
-              </span>
+              <AdminPageHeader
+                badge="Admin · Mascotas"
+                title="Gestión de mascotas"
+                description="Revisa mascotas registradas, su dueño, el estado del perfil público, la placa activa, el perfil médico y las vacunas registradas."
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      onClick={exportCsv}
+                      disabled={loading || filteredPets.length === 0}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Exportar CSV
+                    </button>
 
-              <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    Gestión de <span className="text-[#E8C547]">mascotas</span>
-                  </h1>
-
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Revisa mascotas registradas, su dueño, el estado del perfil
-                    público, la placa activa, el perfil médico y las vacunas
-                    registradas.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={exportCsv}
-                    disabled={loading || filteredPets.length === 0}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Exportar CSV
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => void loadPets()}
-                    disabled={loading}
-                    className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading ? "Actualizando..." : "Recargar mascotas"}
-                  </button>
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => void loadPets()}
+                      disabled={loading}
+                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {loading ? "Actualizando..." : "Recargar mascotas"}
+                    </button>
+                  </>
+                }
+              />
             </div>
 
-            {errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                {errorMsg}
-              </div>
-            )}
-
-            {warningMsg && !errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                {warningMsg}
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                {successMsg}
-              </div>
-            )}
+            <AdminFlashMessages
+              success={successMsg}
+              error={errorMsg}
+              warning={errorMsg ? "" : warningMsg}
+              className="mx-auto mt-8 max-w-7xl"
+            />
 
             {loading ? (
               <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
@@ -936,26 +948,40 @@ export default function AdminPetsPage() {
                     label="Total mascotas"
                     value={totalPets}
                     variant="green"
+                    active={quickFilter === "all"}
+                    onClick={() => setQuickFilter("all")}
                   />
+
                   <StatCard
                     label="Activas"
                     value={activePets}
                     variant="neutral"
+                    active={quickFilter === "active"}
+                    onClick={() => setQuickFilter("active")}
                   />
+
                   <StatCard
                     label="Modo perdido"
                     value={lostModePets}
                     variant="yellow"
+                    active={quickFilter === "lost_mode"}
+                    onClick={() => setQuickFilter("lost_mode")}
                   />
+
                   <StatCard
                     label="Ficha médica registrada"
                     value={medicalEnabledPets}
                     variant="neutral"
+                    active={quickFilter === "medical"}
+                    onClick={() => setQuickFilter("medical")}
                   />
+
                   <StatCard
                     label="Sin perfil público"
                     value={noProfilePets}
                     variant="yellow"
+                    active={quickFilter === "no_profile"}
+                    onClick={() => setQuickFilter("no_profile")}
                   />
                 </div>
 
@@ -980,7 +1006,9 @@ export default function AdminPetsPage() {
                       </label>
                       <CustomSelect
                         value={speciesFilter}
-                        onChange={(value) => setSpeciesFilter(value as SpeciesFilter)}
+                        onChange={(value) =>
+                          setSpeciesFilter(value as SpeciesFilter)
+                        }
                         options={speciesOptions}
                         placeholder="Todas"
                       />
@@ -992,7 +1020,9 @@ export default function AdminPetsPage() {
                       </label>
                       <CustomSelect
                         value={statusFilter}
-                        onChange={(value) => setStatusFilter(value as PetStatusFilter)}
+                        onChange={(value) =>
+                          setStatusFilter(value as PetStatusFilter)
+                        }
                         options={statusOptions}
                         placeholder="Todos"
                       />
@@ -1018,7 +1048,9 @@ export default function AdminPetsPage() {
                       </label>
                       <CustomSelect
                         value={medicalFilter}
-                        onChange={(value) => setMedicalFilter(value as MedicalFilter)}
+                        onChange={(value) =>
+                          setMedicalFilter(value as MedicalFilter)
+                        }
                         options={medicalOptions}
                         placeholder="Todos"
                       />
@@ -1072,7 +1104,9 @@ export default function AdminPetsPage() {
                           <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
                             <div>
                               <div className="flex flex-wrap items-center gap-3">
-                                <h2 className="text-2xl font-semibold">{pet.name}</h2>
+                                <h2 className="text-2xl font-semibold">
+                                  {pet.name}
+                                </h2>
 
                                 <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
                                   {getSpeciesLabel(pet.species)}
@@ -1083,7 +1117,9 @@ export default function AdminPetsPage() {
                                     publicProfile?.visibility_status
                                   )}`}
                                 >
-                                  {getVisibilityLabel(publicProfile?.visibility_status)}
+                                  {getVisibilityLabel(
+                                    publicProfile?.visibility_status
+                                  )}
                                 </span>
 
                                 <span
@@ -1113,7 +1149,9 @@ export default function AdminPetsPage() {
                                   {getBreedLabel(pet)}
                                 </div>
                                 <div>
-                                  <span className="text-white/40">Registro:</span>{" "}
+                                  <span className="text-white/40">
+                                    Registro:
+                                  </span>{" "}
                                   {formatDateTime(pet.created_at)}
                                 </div>
                               </div>
@@ -1122,9 +1160,18 @@ export default function AdminPetsPage() {
                                 <>
                                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                                     <InfoBox label="ID mascota" value={pet.id} />
-                                    <InfoBox label="ID dueño" value={pet.owner_user_id} />
-                                    <InfoBox label="Correo dueño" value={ownerEmail} />
-                                    <InfoBox label="Raza" value={getBreedLabel(pet)} />
+                                    <InfoBox
+                                      label="ID dueño"
+                                      value={pet.owner_user_id}
+                                    />
+                                    <InfoBox
+                                      label="Correo dueño"
+                                      value={ownerEmail}
+                                    />
+                                    <InfoBox
+                                      label="Raza"
+                                      value={getBreedLabel(pet)}
+                                    />
                                     <InfoBox
                                       label="Ficha médica"
                                       value={getMedicalStatusLabel(
@@ -1295,7 +1342,8 @@ export default function AdminPetsPage() {
                                                     <span className="text-white/45">
                                                       Dosis:
                                                     </span>{" "}
-                                                    {vaccination.dose_number ?? "—"}
+                                                    {vaccination.dose_number ??
+                                                      "—"}
                                                   </div>
 
                                                   <div>
@@ -1339,7 +1387,7 @@ export default function AdminPetsPage() {
                                     Placa activa
                                   </div>
 
-                                  <div className="mt-2 text-base font-semibold text-[#F5F0E8] break-all">
+                                  <div className="mt-2 break-all text-base font-semibold text-[#F5F0E8]">
                                     {activeTagCode}
                                   </div>
 
@@ -1471,7 +1519,9 @@ export default function AdminPetsPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                            setCurrentPage((prev) =>
+                              Math.min(totalPages, prev + 1)
+                            )
                           }
                           disabled={currentPage === totalPages}
                           className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1492,7 +1542,9 @@ export default function AdminPetsPage() {
 
                     <div className="mt-4 border-t border-white/10 pt-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <label className="text-sm text-white/60">Ir a página</label>
+                        <label className="text-sm text-white/60">
+                          Ir a página
+                        </label>
 
                         <input
                           type="number"
@@ -1534,35 +1586,60 @@ function StatCard({
   label,
   value,
   variant,
+  active = false,
+  onClick,
 }: {
   label: string;
   value: number;
   variant: "green" | "yellow" | "neutral";
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const variantClass =
     variant === "green"
-      ? "border-[#2D5A27]/60 bg-[#12311c]"
+      ? active
+        ? "border-[#2D5A27]/70 bg-[#12311c]"
+        : "border-[#2D5A27]/60 bg-[#12311c]"
       : variant === "yellow"
-      ? "border-[#E8C547]/15 bg-[#E8C547]/8"
-      : "border-white/8 bg-white/[0.04]";
+        ? active
+          ? "border-[#E8C547]/25 bg-[#E8C547]/10"
+          : "border-[#E8C547]/15 bg-[#E8C547]/8"
+        : active
+          ? "border-[#E8C547]/20 bg-[#E8C547]/8"
+          : "border-white/8 bg-white/[0.04]";
 
-  return (
-    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
+  const content = (
+    <>
       <div className="text-sm uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
-      <div className="mt-3 text-4xl font-semibold text-[#E8C547]">{value}</div>
+
+      <div className="mt-3 text-4xl font-semibold text-[#E8C547]">
+        {value}
+      </div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`rounded-[28px] border p-6 text-left transition hover:-translate-y-[1px] ${variantClass}`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
+      {content}
     </div>
   );
 }
 
-function InfoBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function InfoBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
       <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">

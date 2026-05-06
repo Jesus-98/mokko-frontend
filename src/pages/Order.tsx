@@ -4,6 +4,7 @@ import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { buildWhatsAppUrl } from "../config/contact";
 
 type PlatePlanType = "essential" | "custom";
 type PlateColor = "white" | "black" | "green";
@@ -26,8 +27,6 @@ type RpcOrderResult = {
   subtotal: number;
   total: number;
 };
-
-const SUPPORT_WHATSAPP = "51944606429";
 
 const PLAN_PRICES: Record<PlatePlanType, number> = {
   essential: 29,
@@ -364,9 +363,7 @@ export default function Order() {
       setSuccessMsg("Pedido generado correctamente.");
 
       const whatsappMessage = buildWhatsappMessage(result.order_number);
-      const whatsappUrl = `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent(
-        whatsappMessage
-      )}`;
+      const whatsappUrl = buildWhatsAppUrl(whatsappMessage);
 
       window.open(whatsappUrl, "_blank", "noopener,noreferrer");
     } catch (error) {

@@ -6,6 +6,9 @@ import { useAuth } from "../../context/AuthContext";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../../components/ui/CustomSelect";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
+import AdminFlashMessages from "../../components/admin/AdminFlashMessages";
+import AdminAccessDenied from "../../components/admin/AdminAccessDenied";
 
 type OrderStatus =
   | "draft"
@@ -1195,14 +1198,7 @@ export default function AdminOrdersPage() {
         <Header />
 
         <main className="min-h-screen bg-[#1A1A14] text-white">
-          <section className="mokko-container py-12">
-            <div className="mx-auto max-w-4xl rounded-[32px] border border-red-400/20 bg-red-400/10 px-6 py-12">
-              <div className="text-2xl font-semibold">Acceso restringido</div>
-              <p className="mt-3 text-sm leading-7 text-red-200">
-                No tienes permisos para acceder a esta página.
-              </p>
-            </div>
-          </section>
+          <AdminAccessDenied message="No tienes permisos para acceder a la gestión de pedidos." />
         </main>
 
         <Footer />
@@ -1220,61 +1216,40 @@ export default function AdminOrdersPage() {
 
           <div className="mokko-container relative z-10 py-10 md:py-14">
             <div className="mx-auto max-w-7xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Admin · Pedidos
-              </span>
+              <AdminPageHeader
+                badge="Admin · Pedidos"
+                title="Gestión de pedidos"
+                description="Revisa pedidos, filtra por ubicación y fechas, actualiza estados, ajusta envío o descuento y exporta resultados."
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      onClick={exportCsv}
+                      disabled={loading || filteredOrders.length === 0}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Exportar CSV
+                    </button>
 
-              <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    Gestión de <span className="text-[#E8C547]">pedidos</span>
-                  </h1>
-
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Revisa pedidos, filtra por ubicación y fechas, actualiza estados,
-                    ajusta envío o descuento y exporta resultados.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={exportCsv}
-                    disabled={loading || filteredOrders.length === 0}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Exportar CSV
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => void loadOrders()}
-                    disabled={loading}
-                    className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading ? "Actualizando..." : "Recargar pedidos"}
-                  </button>
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => void loadOrders()}
+                      disabled={loading}
+                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {loading ? "Actualizando..." : "Recargar pedidos"}
+                    </button>
+                  </>
+                }
+              />
             </div>
 
-            {errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                {errorMsg}
-              </div>
-            )}
-
-            {warningMsg && !errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                {warningMsg}
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                {successMsg}
-              </div>
-            )}
+            <AdminFlashMessages
+              success={successMsg}
+              error={errorMsg}
+              warning={errorMsg ? "" : warningMsg}
+              className="mx-auto mt-8 max-w-7xl"
+            />
 
             {loading ? (
               <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">

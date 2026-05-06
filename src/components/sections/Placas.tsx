@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
 import { plans } from "../../data/plans";
 import type { Plan } from "../../types";
+import { SUPPORT_WHATSAPP_URLS } from "../../config/contact";
 
-const ALLY_WHATSAPP_URL =
-  "https://wa.me/51906359973?text=Hola,%20quiero%20ser%20aliado%20de%20Mokko.%20%C2%BFMe%20pueden%20dar%20informaci%C3%B3n%3F";
+const ALLY_WHATSAPP_URL = SUPPORT_WHATSAPP_URLS.ally;
 
 function getPlanAction(plan: Plan) {
   const normalizedId = String(plan.id).toLowerCase();
