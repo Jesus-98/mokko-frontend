@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -12,6 +12,37 @@ type PasswordStrength = {
   textColor: string;
 };
 
+type PasswordValidation = {
+  hasMinLength: boolean;
+  hasLowercase: boolean;
+  hasUppercase: boolean;
+  hasNumber: boolean;
+  hasSymbol: boolean;
+  isValid: boolean;
+};
+
+function validatePassword(password: string): PasswordValidation {
+  const hasMinLength = password.length >= 8;
+  const hasLowercase = /[a-z]/.test(password);
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSymbol = /[^A-Za-z0-9]/.test(password);
+
+  return {
+    hasMinLength,
+    hasLowercase,
+    hasUppercase,
+    hasNumber,
+    hasSymbol,
+    isValid:
+      hasMinLength &&
+      hasLowercase &&
+      hasUppercase &&
+      hasNumber &&
+      hasSymbol,
+  };
+}
+
 function getPasswordStrength(password: string): PasswordStrength {
   if (!password) {
     return {
@@ -23,18 +54,19 @@ function getPasswordStrength(password: string): PasswordStrength {
     };
   }
 
-  let score = 0;
+  const validation = validatePassword(password);
 
-  if (password.length >= 8) score++;
-  if (password.length >= 10) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[0-9]/.test(password)) score++;
-  if (/[^A-Za-z0-9]/.test(password)) score++;
+  let score = 0;
+  if (validation.hasMinLength) score++;
+  if (validation.hasLowercase) score++;
+  if (validation.hasUppercase) score++;
+  if (validation.hasNumber) score++;
+  if (validation.hasSymbol) score++;
 
   if (score <= 2) {
     return {
       label: "Débil",
-      helper: "Agrega más caracteres, números, mayúsculas o símbolos.",
+      helper: "Agrega mayúsculas, minúsculas, números y símbolos.",
       color: "bg-red-400",
       width: "w-1/3",
       textColor: "text-red-300",
@@ -44,7 +76,7 @@ function getPasswordStrength(password: string): PasswordStrength {
   if (score <= 4) {
     return {
       label: "Media",
-      helper: "Va bien, pero puedes reforzarla con mayúsculas o símbolos.",
+      helper: "Vas bien, pero aún falta cumplir todos los requisitos.",
       color: "bg-yellow-400",
       width: "w-2/3",
       textColor: "text-yellow-300",
@@ -53,7 +85,7 @@ function getPasswordStrength(password: string): PasswordStrength {
 
   return {
     label: "Fuerte",
-    helper: "Buen nivel de seguridad.",
+    helper: "Cumple con todos los requisitos de seguridad.",
     color: "bg-green-400",
     width: "w-full",
     textColor: "text-green-300",
@@ -67,6 +99,54 @@ function detectRecoveryIntent() {
   return (
     hashParams.get("type") === "recovery" ||
     searchParams.get("type") === "recovery"
+  );
+}
+
+function getReadablePasswordError(message: string) {
+  const normalized = message.trim().toLowerCase();
+
+  if (
+    normalized.includes("password should contain at least one character of each")
+  ) {
+    return "La contraseña debe incluir al menos una minúscula, una mayúscula, un número y un símbolo.";
+  }
+
+  if (normalized.includes("new password should be different")) {
+    return "La nueva contraseña debe ser diferente a la anterior.";
+  }
+
+  if (normalized.includes("same password")) {
+    return "La nueva contraseña no puede ser igual a la anterior.";
+  }
+
+  if (normalized.includes("password is too short")) {
+    return "La contraseña es demasiado corta.";
+  }
+
+  if (normalized.includes("weak password")) {
+    return "La contraseña no cumple con el nivel mínimo de seguridad.";
+  }
+
+  return "No se pudo actualizar la contraseña. Revisa los requisitos e inténtalo nuevamente.";
+}
+
+function RequirementItem({
+  met,
+  label,
+}: {
+  met: boolean;
+  label: string;
+}) {
+  return (
+    <div
+      className={`rounded-xl border px-3 py-2 text-xs transition ${
+        met
+          ? "border-green-400/20 bg-green-400/10 text-green-200"
+          : "border-white/10 bg-white/5 text-white/55"
+      }`}
+    >
+      {label}
+    </div>
   );
 }
 
@@ -141,15 +221,25 @@ export default function UpdatePassword() {
     };
   }, []);
 
-  const passwordStrength = useMemo(() => getPasswordStrength(password), [password]);
+  const passwordValidation = useMemo(
+    () => validatePassword(password),
+    [password]
+  );
+
+  const passwordStrength = useMemo(
+    () => getPasswordStrength(password),
+    [password]
+  );
 
   const passwordsMatch =
     confirmPassword.length > 0 && password === confirmPassword;
 
-  const handleUpdatePassword = async (e: React.FormEvent) => {
+  const isBusy = loading || redirecting;
+
+  const handleUpdatePassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (loading || redirecting) return;
+    if (isBusy) return;
 
     setErrorMsg("");
     setSuccessMsg("");
@@ -159,8 +249,10 @@ export default function UpdatePassword() {
       return;
     }
 
-    if (password.length < 8) {
-      setErrorMsg("La contraseña debe tener al menos 8 caracteres.");
+    if (!passwordValidation.isValid) {
+      setErrorMsg(
+        "Tu contraseña debe tener al menos 8 caracteres, una minúscula, una mayúscula, un número y un símbolo."
+      );
       return;
     }
 
@@ -192,11 +284,14 @@ export default function UpdatePassword() {
       }, 1800);
     } catch (error) {
       console.error("UpdatePassword handleUpdatePassword error:", error);
-      setErrorMsg(
-        error instanceof Error
-          ? error.message
-          : "Ocurrió un error inesperado al actualizar la contraseña."
-      );
+
+      if (error instanceof Error) {
+        setErrorMsg(getReadablePasswordError(error.message));
+      } else {
+        setErrorMsg(
+          "Ocurrió un error inesperado al actualizar la contraseña."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -267,7 +362,9 @@ export default function UpdatePassword() {
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 focus:bg-white/10"
                       placeholder="Ingresa tu nueva contraseña"
-                      disabled={loading || redirecting}
+                      disabled={isBusy}
+                      required
+                      autoComplete="new-password"
                     />
 
                     <div className="mt-4 space-y-2">
@@ -292,6 +389,29 @@ export default function UpdatePassword() {
                         </>
                       )}
                     </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <RequirementItem
+                        met={passwordValidation.hasMinLength}
+                        label="8+ caracteres"
+                      />
+                      <RequirementItem
+                        met={passwordValidation.hasLowercase}
+                        label="Una minúscula"
+                      />
+                      <RequirementItem
+                        met={passwordValidation.hasUppercase}
+                        label="Una mayúscula"
+                      />
+                      <RequirementItem
+                        met={passwordValidation.hasNumber}
+                        label="Un número"
+                      />
+                      <RequirementItem
+                        met={passwordValidation.hasSymbol}
+                        label="Un símbolo"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -305,7 +425,9 @@ export default function UpdatePassword() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 focus:bg-white/10"
                       placeholder="Repite tu contraseña"
-                      disabled={loading || redirecting}
+                      disabled={isBusy}
+                      required
+                      autoComplete="new-password"
                     />
 
                     {confirmPassword.length > 0 && (
@@ -335,18 +457,18 @@ export default function UpdatePassword() {
 
                   <button
                     type="submit"
-                    disabled={loading || redirecting}
+                    disabled={isBusy}
                     className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {redirecting
                       ? "Redirigiendo..."
                       : loading
-                      ? "Actualizando..."
-                      : "Actualizar contraseña"}
+                        ? "Actualizando..."
+                        : "Actualizar contraseña"}
                   </button>
 
                   <p className="text-center text-xs text-white/40">
-                    Usa al menos 8 caracteres para mayor seguridad.
+                    Usa al menos 8 caracteres, una minúscula, una mayúscula, un número y un símbolo.
                   </p>
                 </form>
               )}

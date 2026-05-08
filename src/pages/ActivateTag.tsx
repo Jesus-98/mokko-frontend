@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   BadgeCheck,
@@ -104,6 +104,72 @@ function normalizarCodigo(valor: string) {
   return valor.replace(/\s+/g, "").trim().toUpperCase();
 }
 
+function getReadableTagCheckMessage(
+  status?: string | null,
+  message?: string | null
+) {
+  if (status === "activated") return "Esta placa ya fue activada.";
+  if (status === "reserved") return "Esta placa está reservada.";
+  if (status === "suspended") return "Esta placa está suspendida.";
+  if (status === "lost") return "Esta placa figura como extraviada.";
+  if (status === "retired") return "Esta placa fue retirada.";
+  if (status === "available") return "La placa está disponible para activación.";
+
+  const normalized = message?.trim().toLowerCase() || "";
+
+  if (normalized.includes("not found")) {
+    return "No encontramos ese código de placa.";
+  }
+
+  if (normalized.includes("already activated")) {
+    return "Esta placa ya fue activada.";
+  }
+
+  if (normalized.includes("reserved")) {
+    return "Esta placa está reservada.";
+  }
+
+  if (normalized.includes("suspended")) {
+    return "Esta placa está suspendida.";
+  }
+
+  if (normalized.includes("lost")) {
+    return "Esta placa figura como extraviada.";
+  }
+
+  if (normalized.includes("retired")) {
+    return "Esta placa fue retirada.";
+  }
+
+  return message || "La placa no está disponible.";
+}
+
+function getReadableActivationError(message: string) {
+  const normalized = message.trim().toLowerCase();
+
+  if (normalized.includes("already activated")) {
+    return "Esta placa ya fue activada.";
+  }
+
+  if (normalized.includes("not available")) {
+    return "La placa no está disponible para activación.";
+  }
+
+  if (normalized.includes("not found")) {
+    return "No encontramos ese código de placa.";
+  }
+
+  if (normalized.includes("does not belong to user")) {
+    return "La mascota seleccionada no pertenece a tu cuenta.";
+  }
+
+  if (normalized.includes("permission denied")) {
+    return "No tienes permisos para activar esta placa.";
+  }
+
+  return message;
+}
+
 export default function ActivateTag() {
   const navigate = useNavigate();
   const { user, profile, loading: authLoading } = useAuth();
@@ -190,6 +256,24 @@ export default function ActivateTag() {
       { value: VALOR_RAZA_CUSTOM, label: "No encuentro la raza" },
     ];
   }, [razas, especieMascota]);
+
+  const usuarioActivoLabel = useMemo(() => {
+    return (
+      profile?.full_name ||
+      profile?.email ||
+      user?.email ||
+      "Usuario autenticado"
+    );
+  }, [profile?.full_name, profile?.email, user?.email]);
+
+  const puedeRegistrarNueva = razas.length > 0;
+
+  const canActivateTag =
+    !!mascotaSeleccionadaId &&
+    !!codigoVerificado &&
+    codigoVerificado === normalizarCodigo(codigoPlaca) &&
+    !submitting &&
+    !validandoCodigo;
 
   const limpiarEstadoCodigo = () => {
     setCodigoVerificado("");
@@ -321,7 +405,7 @@ export default function ActivateTag() {
     setPaso("placa");
   };
 
-  const crearMascota = async (e: React.FormEvent) => {
+  const crearMascota = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!user?.id) {
@@ -430,20 +514,7 @@ export default function ActivateTag() {
 
       if (!respuesta?.valid) {
         const estado = respuesta?.status || null;
-
-        let mensaje = respuesta?.message || "La placa no está disponible.";
-
-        if (estado === "activated") {
-          mensaje = "Esta placa ya fue activada.";
-        } else if (estado === "reserved") {
-          mensaje = "Esta placa está reservada.";
-        } else if (estado === "suspended") {
-          mensaje = "Esta placa está suspendida.";
-        } else if (estado === "lost") {
-          mensaje = "Esta placa figura como extraviada.";
-        } else if (estado === "retired") {
-          mensaje = "Esta placa fue retirada.";
-        }
+        const mensaje = getReadableTagCheckMessage(estado, respuesta?.message);
 
         setMensajeError(mensaje);
         setEstadoDetectado(estado);
@@ -461,7 +532,7 @@ export default function ActivateTag() {
       console.error("Error verificando código:", error);
       setMensajeError(
         error instanceof Error
-          ? error.message
+          ? getReadableTagCheckMessage(null, error.message)
           : "No se pudo verificar el código."
       );
       return false;
@@ -470,7 +541,7 @@ export default function ActivateTag() {
     }
   };
 
-  const activarPlaca = async (e: React.FormEvent) => {
+  const activarPlaca = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!mascotaSeleccionadaId) {
@@ -513,7 +584,11 @@ export default function ActivateTag() {
       const respuesta = data as RespuestaActivacion | null;
 
       if (respuesta?.success === false) {
-        setMensajeError(respuesta.message || "No se pudo activar la placa.");
+        setMensajeError(
+          getReadableActivationError(
+            respuesta.message || "No se pudo activar la placa."
+          )
+        );
         return;
       }
 
@@ -521,13 +596,17 @@ export default function ActivateTag() {
 
       setTipoActivado(planFinal);
       setCodigoPlaca("");
+      setCodigoVerificado("");
+      setTagIdVerificado(null);
+      setEstadoDetectado("activated");
+      setTipoDetectado(planFinal);
       setMensajeExito(respuesta?.message || "Placa activada correctamente.");
       setPaso("listo");
     } catch (error) {
       console.error("Error activando placa:", error);
       setMensajeError(
         error instanceof Error
-          ? error.message
+          ? getReadableActivationError(error.message)
           : "Ocurrió un error activando la placa."
       );
     } finally {
@@ -545,7 +624,6 @@ export default function ActivateTag() {
   };
 
   const cargandoGeneral = authLoading || cargando;
-  const puedeRegistrarNueva = razas.length > 0;
 
   return (
     <>
@@ -589,8 +667,8 @@ export default function ActivateTag() {
                       activo
                         ? "border-[#E8C547]/60 bg-[#E8C547]/10"
                         : completado
-                        ? "border-[#2D5A27]/60 bg-[#12311c]"
-                        : "border-white/10 bg-white/[0.04]"
+                          ? "border-[#2D5A27]/60 bg-[#12311c]"
+                          : "border-white/10 bg-white/[0.04]"
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -599,8 +677,8 @@ export default function ActivateTag() {
                           activo
                             ? "bg-[#E8C547] text-[#1A1A14]"
                             : completado
-                            ? "bg-[#2D5A27] text-white"
-                            : "bg-white/10 text-white/70"
+                              ? "bg-[#2D5A27] text-white"
+                              : "bg-white/10 text-white/70"
                         }`}
                       >
                         <Icon className="h-4.5 w-4.5" />
@@ -740,10 +818,7 @@ export default function ActivateTag() {
                           Cuenta activa
                         </div>
                         <div className="mt-2 text-base font-semibold">
-                          {profile?.full_name ||
-                            profile?.email ||
-                            user?.email ||
-                            "Usuario autenticado"}
+                          {usuarioActivoLabel}
                         </div>
                       </div>
                     )}
@@ -1078,10 +1153,7 @@ export default function ActivateTag() {
                             Sesión activa
                           </div>
                           <div className="mt-2 text-sm font-medium text-white/80">
-                            {profile?.full_name ||
-                              profile?.email ||
-                              user?.email ||
-                              "Usuario autenticado"}
+                            {usuarioActivoLabel}
                           </div>
                         </div>
                       )}
@@ -1147,6 +1219,7 @@ export default function ActivateTag() {
                           className="uppercase tracking-[0.18em]"
                           placeholder="ABC123"
                           maxLength={6}
+                          autoComplete="off"
                           disabled={submitting || validandoCodigo}
                         />
                         <p className="mt-2 text-xs text-white/45">
@@ -1186,12 +1259,7 @@ export default function ActivateTag() {
 
                         <button
                           type="submit"
-                          disabled={
-                            submitting ||
-                            !mascotaSeleccionadaId ||
-                            !codigoVerificado ||
-                            codigoVerificado !== normalizarCodigo(codigoPlaca)
-                          }
+                          disabled={!canActivateTag}
                           className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
                         >
                           {submitting ? "Activando..." : "Activar placa"}

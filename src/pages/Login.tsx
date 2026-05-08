@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -10,6 +10,7 @@ function getSafeNext(search: string) {
 
   if (!rawNext) return "/dashboard";
   if (!rawNext.startsWith("/")) return "/dashboard";
+  if (rawNext.startsWith("//")) return "/dashboard";
 
   return rawNext;
 }
@@ -39,7 +40,15 @@ function getReadableAuthError(message: string) {
     return "Se detectaron demasiados intentos. Espera un momento e inténtalo nuevamente.";
   }
 
-  return message;
+  if (normalized.includes("unable to validate email address")) {
+    return "Ingresa un correo válido.";
+  }
+
+  if (normalized.includes("for security purposes")) {
+    return "Por seguridad, espera un momento antes de volver a intentarlo.";
+  }
+
+  return "No se pudo completar la operación. Inténtalo nuevamente.";
 }
 
 export default function Login() {
@@ -64,7 +73,7 @@ export default function Login() {
     }
   }, [authLoading, user, navigate, next]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (loginLoading || forgotLoading || authLoading) return;
@@ -260,8 +269,8 @@ export default function Login() {
                     {loginLoading
                       ? "Ingresando..."
                       : authLoading
-                      ? "Cargando..."
-                      : "Ingresar"}
+                        ? "Cargando..."
+                        : "Ingresar"}
                   </button>
                 </form>
 

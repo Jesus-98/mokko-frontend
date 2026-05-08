@@ -13,6 +13,15 @@ type PasswordStrength = {
   textColor: string;
 };
 
+type PasswordValidation = {
+  hasMinLength: boolean;
+  hasLowercase: boolean;
+  hasUppercase: boolean;
+  hasNumber: boolean;
+  hasSymbol: boolean;
+  isValid: boolean;
+};
+
 function getSafeNext(search: string) {
   const rawNext = new URLSearchParams(search).get("next");
 
@@ -20,6 +29,28 @@ function getSafeNext(search: string) {
   if (!rawNext.startsWith("/")) return "/activar";
 
   return rawNext;
+}
+
+function validatePassword(password: string): PasswordValidation {
+  const hasMinLength = password.length >= 8;
+  const hasLowercase = /[a-z]/.test(password);
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSymbol = /[^A-Za-z0-9]/.test(password);
+
+  return {
+    hasMinLength,
+    hasLowercase,
+    hasUppercase,
+    hasNumber,
+    hasSymbol,
+    isValid:
+      hasMinLength &&
+      hasLowercase &&
+      hasUppercase &&
+      hasNumber &&
+      hasSymbol,
+  };
 }
 
 function getPasswordStrength(password: string): PasswordStrength {
@@ -33,18 +64,19 @@ function getPasswordStrength(password: string): PasswordStrength {
     };
   }
 
-  let score = 0;
+  const validation = validatePassword(password);
 
-  if (password.length >= 8) score++;
-  if (password.length >= 10) score++;
-  if (/[A-Z]/.test(password)) score++;
-  if (/[0-9]/.test(password)) score++;
-  if (/[^A-Za-z0-9]/.test(password)) score++;
+  let score = 0;
+  if (validation.hasMinLength) score++;
+  if (validation.hasLowercase) score++;
+  if (validation.hasUppercase) score++;
+  if (validation.hasNumber) score++;
+  if (validation.hasSymbol) score++;
 
   if (score <= 2) {
     return {
       label: "Débil",
-      helper: "Agrega más caracteres, números, mayúsculas o símbolos.",
+      helper: "Agrega mayúsculas, minúsculas, números y símbolos.",
       color: "bg-red-400",
       width: "w-1/3",
       textColor: "text-red-300",
@@ -54,7 +86,7 @@ function getPasswordStrength(password: string): PasswordStrength {
   if (score <= 4) {
     return {
       label: "Media",
-      helper: "Va bien, pero puedes reforzarla con mayúsculas o símbolos.",
+      helper: "Vas bien, pero aún falta cumplir todos los requisitos.",
       color: "bg-yellow-400",
       width: "w-2/3",
       textColor: "text-yellow-300",
@@ -63,7 +95,7 @@ function getPasswordStrength(password: string): PasswordStrength {
 
   return {
     label: "Fuerte",
-    helper: "Buen nivel de seguridad.",
+    helper: "Cumple con todos los requisitos de seguridad.",
     color: "bg-green-400",
     width: "w-full",
     textColor: "text-green-300",
@@ -87,8 +119,18 @@ function getReadableAuthError(message: string) {
     return "Ese correo ya está registrado. Intenta iniciar sesión.";
   }
 
+  if (
+    normalized.includes("password should contain at least one character of each")
+  ) {
+    return "La contraseña debe incluir al menos una minúscula, una mayúscula, un número y un símbolo.";
+  }
+
   if (normalized.includes("password should be at least")) {
     return "La contraseña debe tener al menos 8 caracteres.";
+  }
+
+  if (normalized.includes("weak password")) {
+    return "La contraseña no cumple con el nivel mínimo de seguridad.";
   }
 
   if (normalized.includes("signup is disabled")) {
@@ -103,7 +145,27 @@ function getReadableAuthError(message: string) {
     return "Por seguridad, espera un momento antes de volver a intentarlo.";
   }
 
-  return message;
+  return "No se pudo crear la cuenta. Revisa tus datos e inténtalo nuevamente.";
+}
+
+function RequirementItem({
+  met,
+  label,
+}: {
+  met: boolean;
+  label: string;
+}) {
+  return (
+    <div
+      className={`rounded-xl border px-3 py-2 text-xs transition ${
+        met
+          ? "border-green-400/20 bg-green-400/10 text-green-200"
+          : "border-white/10 bg-white/5 text-white/55"
+      }`}
+    >
+      {label}
+    </div>
+  );
 }
 
 export default function Register() {
@@ -127,6 +189,11 @@ export default function Register() {
     }
   }, [authLoading, user, navigate, next]);
 
+  const passwordValidation = useMemo(
+    () => validatePassword(password),
+    [password]
+  );
+
   const passwordStrength = useMemo(
     () => getPasswordStrength(password),
     [password]
@@ -149,8 +216,10 @@ export default function Register() {
         throw new Error("Ingresa tu nombre completo.");
       }
 
-      if (password.length < 8) {
-        throw new Error("La contraseña debe tener al menos 8 caracteres.");
+      if (!passwordValidation.isValid) {
+        throw new Error(
+          "Tu contraseña debe tener al menos 8 caracteres, una minúscula, una mayúscula, un número y un símbolo."
+        );
       }
 
       const siteUrl = getSiteUrl();
@@ -331,6 +400,29 @@ export default function Register() {
                         </>
                       )}
                     </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <RequirementItem
+                        met={passwordValidation.hasMinLength}
+                        label="8+ caracteres"
+                      />
+                      <RequirementItem
+                        met={passwordValidation.hasLowercase}
+                        label="Una minúscula"
+                      />
+                      <RequirementItem
+                        met={passwordValidation.hasUppercase}
+                        label="Una mayúscula"
+                      />
+                      <RequirementItem
+                        met={passwordValidation.hasNumber}
+                        label="Un número"
+                      />
+                      <RequirementItem
+                        met={passwordValidation.hasSymbol}
+                        label="Un símbolo"
+                      />
+                    </div>
                   </div>
 
                   {errorMsg && (
@@ -358,7 +450,7 @@ export default function Register() {
                   </button>
 
                   <p className="text-center text-xs text-white/40">
-                    Usa al menos 8 caracteres para mayor seguridad.
+                    Usa al menos 8 caracteres, una minúscula, una mayúscula, un número y un símbolo.
                   </p>
                 </form>
 
