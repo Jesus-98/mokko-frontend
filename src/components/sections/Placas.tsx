@@ -1,13 +1,22 @@
 import { Link } from "react-router-dom";
+import { SUPPORT_WHATSAPP_URLS } from "../../config/contact";
 import { plans } from "../../data/plans";
 import type { Plan } from "../../types";
-import { SUPPORT_WHATSAPP_URLS } from "../../config/contact";
 
 const ALLY_WHATSAPP_URL = SUPPORT_WHATSAPP_URLS.ally;
 
+const REGULAR_PRICES_BY_PLAN_ID: Record<string, string> = {
+  essential: "S/ 39",
+  custom: "S/ 59",
+};
+
+function normalizeText(value: unknown) {
+  return String(value ?? "").toLowerCase();
+}
+
 function getPlanAction(plan: Plan) {
-  const normalizedId = String(plan.id).toLowerCase();
-  const normalizedName = String(plan.name).toLowerCase();
+  const normalizedId = normalizeText(plan.id);
+  const normalizedName = normalizeText(plan.name);
 
   if (
     normalizedId.includes("essential") ||
@@ -30,6 +39,68 @@ function getPlanAction(plan: Plan) {
     type: "external" as const,
     href: ALLY_WHATSAPP_URL,
   };
+}
+
+function getRegularPrice(plan: Plan) {
+  return REGULAR_PRICES_BY_PLAN_ID[normalizeText(plan.id)] ?? null;
+}
+
+function LaunchPriceBlock({
+  plan,
+  isHighlighted,
+}: {
+  plan: Plan;
+  isHighlighted: boolean;
+}) {
+  const regularPrice = getRegularPrice(plan);
+
+  if (!plan.price) {
+    return (
+      <div className="text-3xl font-semibold leading-tight tracking-tight">
+        Planes a tu medida
+      </div>
+    );
+  }
+
+  const mutedTextClass = isHighlighted ? "text-black/50" : "text-white/45";
+  const priceClass = isHighlighted ? "text-[#1A1A14]" : "text-[#F5F0E8]";
+  const launchPillClass = isHighlighted
+    ? "border-black/10 bg-black/10 text-[#1A1A14]"
+    : "border-[#E8C547]/25 bg-[#E8C547]/10 text-[#E8C547]";
+
+  return (
+    <div className="space-y-3">
+      {regularPrice && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`text-sm font-medium ${mutedTextClass}`}>
+            Precio regular
+          </span>
+
+          <span
+            className={`relative text-2xl font-semibold tracking-tight ${mutedTextClass}`}
+            aria-label={`Precio regular ${regularPrice}`}
+          >
+            <span className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 rotate-[-8deg] rounded-full bg-current" />
+            {regularPrice}
+          </span>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className={`text-5xl font-semibold tracking-tight ${priceClass}`}>
+          {plan.price}
+        </div>
+
+        {regularPrice && (
+          <span
+            className={`mb-1 inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] ${launchPillClass}`}
+          >
+            Lanzamiento
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function PlanCard({ plan }: { plan: Plan }) {
@@ -76,10 +147,12 @@ function PlanCard({ plan }: { plan: Plan }) {
           </div>
         )}
 
-        <div className="text-sm font-medium text-black/60">{plan.name}</div>
+        <div className="pr-24 text-sm font-medium text-black/60">
+          {plan.name}
+        </div>
 
-        <div className="mt-4 flex items-end gap-2">
-          <div className="text-5xl font-semibold tracking-tight">{plan.price}</div>
+        <div className="mt-5">
+          <LaunchPriceBlock plan={plan} isHighlighted />
         </div>
 
         <div className="mt-3 text-sm text-black/60">{plan.priceLabel}</div>
@@ -101,14 +174,8 @@ function PlanCard({ plan }: { plan: Plan }) {
 
       <div className="text-sm font-medium text-white/55">{plan.name}</div>
 
-      <div className="mt-4">
-        {plan.price ? (
-          <div className="text-5xl font-semibold tracking-tight">{plan.price}</div>
-        ) : (
-          <div className="text-3xl font-semibold leading-tight tracking-tight">
-            Planes a tu medida
-          </div>
-        )}
+      <div className="mt-5">
+        <LaunchPriceBlock plan={plan} isHighlighted={false} />
       </div>
 
       <div className="mt-3 text-sm text-white/50">{plan.priceLabel}</div>
@@ -138,8 +205,9 @@ export default function Placas() {
           </h2>
 
           <p className="mt-4 max-w-2xl text-base leading-7 text-white/65 sm:text-lg sm:leading-8">
-            Desde una opción esencial hasta una versión personalizada, todas nuestras
-            placas incluyen identificación inteligente, perfil digital y activación simple.
+            Desde una opción esencial hasta una versión personalizada, todas
+            nuestras placas incluyen identificación inteligente, perfil digital
+            y activación simple.
           </p>
         </div>
 
@@ -154,7 +222,6 @@ export default function Placas() {
             { icon: "🔒", text: "Pago único, sin suscripciones" },
             { icon: "📱", text: "Compatible con NFC + QR" },
             { icon: "⚡", text: "Activación simple en minutos" },
-            { icon: "🐾", text: "Primeras 50 placas a precio especial" },
           ].map((item) => (
             <div key={item.text} className="inline-flex items-center gap-2">
               <span className="text-[#E8C547]">{item.icon}</span>
