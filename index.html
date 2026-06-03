@@ -17,6 +17,9 @@
     <meta name="theme-color" content="#1A1A14" />
     <meta name="application-name" content="Mokko" />
     <meta name="apple-mobile-web-app-title" content="Mokko" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
 
     <link rel="canonical" href="https://www.mokkopet.com/" />
@@ -38,6 +41,7 @@
       property="og:image"
       content="https://www.mokkopet.com/og-image.jpg"
     />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -47,6 +51,7 @@
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://www.mokkopet.com/" />
     <meta
       name="twitter:title"
       content="Mokko — La identidad digital de tu mascota"
@@ -72,16 +77,36 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "Organization",
-        "name": "Mokko",
-        "url": "https://www.mokkopet.com/",
-        "logo": "https://www.mokkopet.com/favicon.svg",
-        "email": "mokkopet@gmail.com",
-        "description": "Placa NFC inteligente para mascotas. Si alguien encuentra a tu mascota, podrá contactarte en segundos.",
-        "sameAs": []
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.mokkopet.com/#organization",
+            "name": "Mokko",
+            "url": "https://www.mokkopet.com/",
+            "logo": "https://www.mokkopet.com/apple-touch-icon.png",
+            "email": "mokkopet@gmail.com",
+            "description": "Placa NFC inteligente para mascotas. Si alguien encuentra a tu mascota, podrá contactarte en segundos.",
+            "areaServed": {
+              "@type": "Country",
+              "name": "Perú"
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://www.mokkopet.com/#website",
+            "name": "Mokko",
+            "url": "https://www.mokkopet.com/",
+            "description": "La identidad digital de tu mascota.",
+            "publisher": {
+              "@id": "https://www.mokkopet.com/#organization"
+            },
+            "inLanguage": "es-PE"
+          }
+        ]
       }
     </script>
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

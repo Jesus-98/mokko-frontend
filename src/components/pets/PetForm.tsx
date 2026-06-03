@@ -6,7 +6,7 @@ import Button from "../ui/Button";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../ui/CustomSelect";
-import { FieldLabel, TextInput } from "../ui/Field";
+import { DateInput, FieldLabel, TextInput } from "../ui/Field";
 
 type SpeciesType = "dog" | "cat";
 type PetSexType = "male" | "female" | "unknown";
@@ -466,8 +466,7 @@ export default function PetForm({
 
         <div>
           <FieldLabel>Fecha de nacimiento</FieldLabel>
-          <TextInput
-            type="date"
+          <DateInput
             value={birthdate}
             onChange={(e) => setBirthdate(e.target.value)}
             disabled={formBusy}
@@ -500,7 +499,9 @@ export default function PetForm({
                   type="file"
                   accept="image/png,image/jpeg,image/webp,image/jpg"
                   disabled={formBusy}
-                  onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
+                  onChange={(e) =>
+                    handlePhotoChange(e.target.files?.[0] ?? null)
+                  }
                   className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-sm text-white outline-none transition file:mr-4 file:rounded-xl file:border-0 file:bg-[#E8C547] file:px-4 file:py-2 file:font-medium file:text-[#1A1A14] hover:file:bg-[#f0cf55] focus:border-[#E8C547]/50"
                 />
 

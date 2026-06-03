@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  AlertTriangle,
+  Archive,
+  CheckCircle2,
+  Copy,
+  PawPrint,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  Star,
+  Tags,
+} from "lucide-react";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { supabase } from "../lib/supabase";
@@ -7,6 +20,7 @@ import { useAuth } from "../context/AuthContext";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../components/ui/CustomSelect";
+import { FieldLabel, TextArea, TextInput } from "../components/ui/Field";
 
 type PlanVendido = "essential" | "custom" | "partner_batch" | "other";
 
@@ -25,8 +39,6 @@ type FiltroEstado =
   | "suspended"
   | "lost"
   | "retired";
-
-type FiltroPrincipal = "all" | "primary" | "secondary";
 
 type TagRow = {
   petTagId: string;
@@ -184,10 +196,8 @@ function getTagStatusClass(status?: EstadoTag | null) {
   }
 }
 
-function getPrimaryLabelClass(isPrimary: boolean) {
-  return isPrimary
-    ? "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]"
-    : "border-white/10 bg-white/5 text-white/65";
+function getPrimaryLabelClass() {
+  return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]";
 }
 
 function getPetBreedLabel(pet: PetFetchRow) {
@@ -215,7 +225,6 @@ export default function MyTagsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [petFilter, setPetFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<FiltroEstado>("visible");
-  const [primaryFilter, setPrimaryFilter] = useState<FiltroPrincipal>("all");
 
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [actionNote, setActionNote] = useState("");
@@ -305,6 +314,7 @@ export default function MyTagsPage() {
       setTags(rows);
     } catch (error) {
       console.error("MyTagsPage load error:", error);
+
       setErrorMsg(
         error instanceof Error
           ? error.message
@@ -317,30 +327,48 @@ export default function MyTagsPage() {
 
   useEffect(() => {
     if (authLoading) return;
+
     if (!user?.id) {
       setLoading(false);
       return;
     }
+
     void loadTags();
   }, [authLoading, user?.id, loadTags]);
 
   const totalTags = tags.length;
+
   const activeTagsCount = useMemo(
     () => tags.filter((tag) => tag.tagStatus === "activated").length,
     [tags]
   );
+
   const suspendedTagsCount = useMemo(
     () => tags.filter((tag) => tag.tagStatus === "suspended").length,
     [tags]
   );
+
   const lostTagsCount = useMemo(
     () => tags.filter((tag) => tag.tagStatus === "lost").length,
     [tags]
   );
+
   const retiredTagsCount = useMemo(
     () => tags.filter((tag) => tag.tagStatus === "retired").length,
     [tags]
   );
+
+  const activatedTagsByPetCount = useMemo(() => {
+    const map = new Map<string, number>();
+
+    tags.forEach((tag) => {
+      if (tag.tagStatus !== "activated") return;
+
+      map.set(tag.petId, (map.get(tag.petId) ?? 0) + 1);
+    });
+
+    return map;
+  }, [tags]);
 
   const petOptions = useMemo<CustomSelectOption[]>(() => {
     const map = new Map<string, string>();
@@ -366,12 +394,6 @@ export default function MyTagsPage() {
     { value: "all", label: "Todas" },
   ];
 
-  const primaryOptions: CustomSelectOption[] = [
-    { value: "all", label: "Todas" },
-    { value: "primary", label: "Principales" },
-    { value: "secondary", label: "Secundarias" },
-  ];
-
   const filteredTags = useMemo(() => {
     const term = normalizeText(searchTerm);
 
@@ -382,15 +404,8 @@ export default function MyTagsPage() {
         statusFilter === "all"
           ? true
           : statusFilter === "visible"
-          ? tag.tagStatus !== "retired"
-          : tag.tagStatus === statusFilter;
-
-      const matchesPrimary =
-        primaryFilter === "all"
-          ? true
-          : primaryFilter === "primary"
-          ? tag.isPrimary
-          : !tag.isPrimary;
+            ? tag.tagStatus !== "retired"
+            : tag.tagStatus === statusFilter;
 
       const haystack = normalizeText(
         [
@@ -408,15 +423,14 @@ export default function MyTagsPage() {
 
       const matchesSearch = term ? haystack.includes(term) : true;
 
-      return matchesPet && matchesStatus && matchesPrimary && matchesSearch;
+      return matchesPet && matchesStatus && matchesSearch;
     });
-  }, [tags, searchTerm, petFilter, statusFilter, primaryFilter]);
+  }, [tags, searchTerm, petFilter, statusFilter]);
 
   const clearFilters = () => {
     setSearchTerm("");
     setPetFilter("all");
     setStatusFilter("visible");
-    setPrimaryFilter("all");
   };
 
   const runTagStatusUpdate = async (
@@ -451,9 +465,11 @@ export default function MyTagsPage() {
       setSuccessMsg(
         response?.message || "Estado de la placa actualizado correctamente."
       );
+
       await loadTags();
     } catch (error) {
       console.error("runTagStatusUpdate error:", error);
+
       setErrorMsg(
         error instanceof Error
           ? error.message
@@ -485,9 +501,11 @@ export default function MyTagsPage() {
       setSuccessMsg(
         response?.message || "Placa principal actualizada correctamente."
       );
+
       await loadTags();
     } catch (error) {
       console.error("handleSetPrimary error:", error);
+
       setErrorMsg(
         error instanceof Error
           ? error.message
@@ -495,6 +513,17 @@ export default function MyTagsPage() {
       );
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  const copyTagCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setSuccessMsg("Código copiado al portapapeles.");
+      setErrorMsg("");
+    } catch {
+      setErrorMsg("No se pudo copiar el código.");
+      setSuccessMsg("");
     }
   };
 
@@ -534,23 +563,26 @@ export default function MyTagsPage() {
         <main className="min-h-screen bg-[#1A1A14] text-white">
           <section className="mokko-container py-12">
             <div className="mx-auto max-w-4xl rounded-[32px] border border-white/10 bg-white/[0.04] px-6 py-12">
-              <div className="text-2xl font-semibold">Inicia sesión para ver tus placas</div>
+              <div className="text-2xl font-semibold">
+                Inicia sesión para ver tus placas
+              </div>
+
               <p className="mt-3 text-sm leading-7 text-white/70">
                 Necesitas una cuenta Mokko para gestionar tus placas activas,
-                principales, suspendidas o extraviadas.
+                suspendidas, extraviadas o retiradas.
               </p>
 
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
                 <Link
                   to="/login?next=/mis-placas"
-                  className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14]"
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
                 >
                   Iniciar sesión
                 </Link>
 
                 <Link
                   to="/register?next=/mis-placas"
-                  className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
                 >
                   Crear cuenta
                 </Link>
@@ -572,355 +604,425 @@ export default function MyTagsPage() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.16),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
-            <div className="mx-auto max-w-7xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Mi cuenta · Mis placas
-              </span>
+          <div className="mokko-container relative z-10 py-7 md:py-14">
+            <div className="mx-auto max-w-6xl">
+              <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[36px] md:p-8">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-5">
+                    <span className="mokko-badge mokko-badge-primary w-fit">
+                      Mis placas
+                    </span>
 
-              <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    Gestiona tus <span className="text-[#E8C547]">placas</span>
-                  </h1>
+                    <div className="space-y-4">
+                      <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                        Gestiona tus{" "}
+                        <span className="text-[#E8C547]">placas</span>
+                      </h1>
 
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Revisa tus placas activas, define cuál es la principal y
-                    gestiona estados como suspendida, extraviada o retirada.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void loadTags()}
-                  disabled={loading}
-                  className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {loading ? "Actualizando..." : "Recargar placas"}
-                </button>
-              </div>
-            </div>
-
-            {errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                {errorMsg}
-              </div>
-            )}
-
-            {warningMsg && !errorMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                {warningMsg}
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="mx-auto mt-8 max-w-7xl rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                {successMsg}
-              </div>
-            )}
-
-            {loading ? (
-              <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
-                Cargando placas...
-              </div>
-            ) : (
-              <>
-                <div className="mx-auto mt-8 grid max-w-7xl gap-4 md:grid-cols-5">
-                  <StatCard label="Total placas" value={totalTags} variant="neutral" />
-                  <StatCard label="Activas" value={activeTagsCount} variant="green" />
-                  <StatCard
-                    label="Suspendidas"
-                    value={suspendedTagsCount}
-                    variant="yellow"
-                  />
-                  <StatCard
-                    label="Extraviadas"
-                    value={lostTagsCount}
-                    variant="yellow"
-                  />
-                  <StatCard
-                    label="Retiradas"
-                    value={retiredTagsCount}
-                    variant="neutral"
-                  />
-                </div>
-
-                <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                  <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr_0.7fr_0.7fr]">
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Buscar placa
-                      </label>
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Código, mascota, raza, tipo o estado"
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Mascota
-                      </label>
-                      <CustomSelect
-                        value={petFilter}
-                        onChange={(value) => setPetFilter(value)}
-                        options={petOptions}
-                        placeholder="Todas"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Estado
-                      </label>
-                      <CustomSelect
-                        value={statusFilter}
-                        onChange={(value) => setStatusFilter(value as FiltroEstado)}
-                        options={statusOptions}
-                        placeholder="Visibles"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Principal
-                      </label>
-                      <CustomSelect
-                        value={primaryFilter}
-                        onChange={(value) => setPrimaryFilter(value as FiltroPrincipal)}
-                        options={primaryOptions}
-                        placeholder="Todas"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm text-white/50">
-                      Mostrando {filteredTags.length} placa
-                      {filteredTags.length === 1 ? "" : "s"}.
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={clearFilters}
-                      className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                    >
-                      Limpiar filtros
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mx-auto mt-8 grid max-w-7xl gap-5">
-                  {filteredTags.length === 0 ? (
-                    <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
-                      <div className="text-2xl font-semibold">
-                        No se encontraron placas
-                      </div>
-                      <p className="mt-3 text-sm leading-7 text-white/65">
-                        Ajusta la búsqueda o los filtros para ver otros resultados.
+                      <p className="max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
+                        Revisa tus placas activas, cambia estados cuando sea
+                        necesario y accede rápido a la mascota vinculada.
                       </p>
                     </div>
-                  ) : (
-                    filteredTags.map((tag) => {
-                      const isBusy = actionLoadingId === tag.petTagId;
-                      const canReactivate =
-                        tag.tagStatus === "suspended" || tag.tagStatus === "lost";
-                      const canSuspend = tag.tagStatus === "activated";
-                      const canMarkLost =
-                        tag.tagStatus === "activated" ||
-                        tag.tagStatus === "suspended";
-                      const canRetire =
-                        tag.tagStatus !== "retired";
-                      const showInlineAction = pendingAction?.petTagId === tag.petTagId;
+                  </div>
 
-                      return (
-                        <div
-                          key={tag.petTagId}
-                          className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm"
-                        >
-                          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-3">
-                                <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/10 bg-[#141410]">
-                                  {tag.petPhotoUrl ? (
-                                    <img
-                                      src={tag.petPhotoUrl}
-                                      alt={tag.petName}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-[11px] text-white/40">
-                                      Sin foto
+                  <button
+                    type="button"
+                    onClick={() => void loadTags()}
+                    disabled={loading}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3.5"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    {loading ? "Actualizando..." : "Recargar placas"}
+                  </button>
+                </div>
+              </div>
+
+              {errorMsg && (
+                <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                  {errorMsg}
+                </div>
+              )}
+
+              {warningMsg && !errorMsg && (
+                <div className="mt-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm leading-6 text-[#f6df8a]">
+                  {warningMsg}
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
+                  {successMsg}
+                </div>
+              )}
+
+              {loading ? (
+                <div className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.04] p-8 text-center text-white/65 shadow-2xl backdrop-blur-sm md:rounded-[32px]">
+                  Cargando placas...
+                </div>
+              ) : (
+                <>
+                  <section className="mt-7 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+                    <MetricCard
+                      icon={Tags}
+                      label="Total"
+                      value={totalTags}
+                      description="Placas."
+                    />
+
+                    <MetricCard
+                      icon={CheckCircle2}
+                      label="Activas"
+                      value={activeTagsCount}
+                      description="En uso."
+                      highlight
+                    />
+
+                    <MetricCard
+                      icon={ShieldCheck}
+                      label="Suspendidas"
+                      value={suspendedTagsCount}
+                      description="Pausadas."
+                      highlight={suspendedTagsCount > 0}
+                    />
+
+                    <MetricCard
+                      icon={AlertTriangle}
+                      label="Extraviadas"
+                      value={lostTagsCount}
+                      description="Reportadas."
+                      highlight={lostTagsCount > 0}
+                    />
+
+                    <MetricCard
+                      icon={Archive}
+                      label="Retiradas"
+                      value={retiredTagsCount}
+                      description="No activas."
+                    />
+                  </section>
+
+                  <section className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px]">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <h2 className="text-2xl font-semibold">Filtros</h2>
+                        <p className="mt-2 text-sm leading-7 text-white/60">
+                          Encuentra una placa por código, mascota, estado o
+                          plan.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
+                      >
+                        Limpiar filtros
+                      </button>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 lg:grid-cols-[1.3fr_0.85fr_0.85fr]">
+                      <div>
+                        <FieldLabel>Buscar placa</FieldLabel>
+                        <div className="relative">
+                          <TextInput
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Código, mascota, raza, tipo o estado"
+                            className="pl-11"
+                          />
+                          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <FieldLabel>Mascota</FieldLabel>
+                        <CustomSelect
+                          value={petFilter}
+                          onChange={(value) => setPetFilter(value)}
+                          options={petOptions}
+                          placeholder="Todas"
+                        />
+                      </div>
+
+                      <div>
+                        <FieldLabel>Estado</FieldLabel>
+                        <CustomSelect
+                          value={statusFilter}
+                          onChange={(value) =>
+                            setStatusFilter(value as FiltroEstado)
+                          }
+                          options={statusOptions}
+                          placeholder="Visibles"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-[#141410] px-4 py-3 text-sm text-white/60">
+                      Mostrando{" "}
+                      <span className="font-semibold text-white">
+                        {filteredTags.length}
+                      </span>{" "}
+                      placa{filteredTags.length === 1 ? "" : "s"}.
+                    </div>
+                  </section>
+
+                  <section className="mt-7 grid gap-5">
+                    {filteredTags.length === 0 ? (
+                      <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm md:rounded-[32px]">
+                        <div className="text-2xl font-semibold">
+                          No se encontraron placas
+                        </div>
+
+                        <p className="mt-3 text-sm leading-7 text-white/65">
+                          Ajusta la búsqueda o los filtros para ver otros
+                          resultados.
+                        </p>
+                      </div>
+                    ) : (
+                      filteredTags.map((tag) => {
+                        const isBusy = actionLoadingId === tag.petTagId;
+
+                        const canReactivate =
+                          tag.tagStatus === "suspended" ||
+                          tag.tagStatus === "lost";
+
+                        const canSuspend = tag.tagStatus === "activated";
+
+                        const canMarkLost =
+                          tag.tagStatus === "activated" ||
+                          tag.tagStatus === "suspended";
+
+                        const canRetire = tag.tagStatus !== "retired";
+
+                        const activeTagsForPet =
+                          activatedTagsByPetCount.get(tag.petId) ?? 0;
+
+                        const hasMultipleActiveTagsForPet =
+                          activeTagsForPet > 1;
+
+                        const showPrimaryBadge =
+                          hasMultipleActiveTagsForPet &&
+                          tag.tagStatus === "activated" &&
+                          tag.isPrimary;
+
+                        const canSetPrimary =
+                          hasMultipleActiveTagsForPet &&
+                          !tag.isPrimary &&
+                          tag.tagStatus === "activated";
+
+                        const showInlineAction =
+                          pendingAction?.petTagId === tag.petTagId;
+
+                        return (
+                          <article
+                            key={tag.petTagId}
+                            className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm transition hover:border-[#E8C547]/20 hover:bg-white/[0.055] md:rounded-[32px] md:p-6"
+                          >
+                            <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+                              <div className="min-w-0">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#141410]">
+                                    {tag.petPhotoUrl ? (
+                                      <img
+                                        src={tag.petPhotoUrl}
+                                        alt={tag.petName}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-[11px] text-white/40">
+                                        Sin foto
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h2 className="break-all text-2xl font-semibold tracking-[0.08em] text-[#F5F0E8]">
+                                        {tag.code}
+                                      </h2>
+
+                                      <StatusPill
+                                        className={getTagStatusClass(
+                                          tag.tagStatus
+                                        )}
+                                      >
+                                        {getTagStatusLabel(tag.tagStatus)}
+                                      </StatusPill>
+                                    </div>
+
+                                    <div className="mt-2 text-sm leading-6 text-white/60">
+                                      {tag.petName} ·{" "}
+                                      {getSpeciesLabel(tag.petSpecies)} ·{" "}
+                                      {tag.petBreedLabel}
+                                    </div>
+
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      <StatusPill className="border-white/10 bg-white/5 text-white/75">
+                                        {getPlanLabel(tag.soldPlanType)}
+                                      </StatusPill>
+
+                                      {showPrimaryBadge && (
+                                        <StatusPill
+                                          className={getPrimaryLabelClass()}
+                                        >
+                                          Placa principal
+                                        </StatusPill>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                  <InfoItem
+                                    label="Mascota"
+                                    value={tag.petName}
+                                  />
+                                  <InfoItem
+                                    label="Tipo"
+                                    value={getPlanLabel(tag.soldPlanType)}
+                                  />
+                                  <InfoItem
+                                    label="Activación"
+                                    value={formatDateTime(
+                                      tag.activatedAt || tag.assignedAt
+                                    )}
+                                  />
+                                  <InfoItem
+                                    label="Estado"
+                                    value={getTagStatusLabel(tag.tagStatus)}
+                                  />
+                                </div>
+
+                                {tag.lostMessage &&
+                                  tag.tagStatus === "lost" && (
+                                    <div className="mt-4 rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4 text-sm leading-7 text-orange-100">
+                                      <span className="text-orange-200/75">
+                                        Mensaje de extravío:
+                                      </span>{" "}
+                                      {tag.lostMessage}
                                     </div>
                                   )}
-                                </div>
 
-                                <div>
-                                  <h2 className="text-2xl font-semibold">{tag.code}</h2>
-                                  <div className="mt-1 text-sm text-white/60">
-                                    {tag.petName} · {getSpeciesLabel(tag.petSpecies)} ·{" "}
-                                    {tag.petBreedLabel}
-                                  </div>
-                                </div>
+                                {tag.retiredReason &&
+                                  tag.tagStatus === "retired" && (
+                                    <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm leading-7 text-red-100">
+                                      <span className="text-red-200/75">
+                                        Motivo de retiro:
+                                      </span>{" "}
+                                      {tag.retiredReason}
+                                    </div>
+                                  )}
 
-                                <span
-                                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getPrimaryLabelClass(
-                                    tag.isPrimary
-                                  )}`}
-                                >
-                                  {tag.isPrimary ? "Principal" : "Secundaria"}
-                                </span>
+                                {showInlineAction && pendingAction && (
+                                  <div className="mt-5 rounded-[24px] border border-white/10 bg-[#141410] p-5">
+                                    <div className="text-base font-semibold text-[#F5F0E8]">
+                                      {pendingAction.title}
+                                    </div>
 
-                                <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                                  {getPlanLabel(tag.soldPlanType)}
-                                </span>
-
-                                <span
-                                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getTagStatusClass(
-                                    tag.tagStatus
-                                  )}`}
-                                >
-                                  {getTagStatusLabel(tag.tagStatus)}
-                                </span>
-                              </div>
-
-                              <div className="mt-4 grid gap-3 text-sm text-white/60 md:grid-cols-2">
-                                <div>
-                                  <span className="text-white/40">Mascota:</span>{" "}
-                                  {tag.petName}
-                                </div>
-                                <div>
-                                  <span className="text-white/40">Tipo:</span>{" "}
-                                  {getPlanLabel(tag.soldPlanType)}
-                                </div>
-                                <div>
-                                  <span className="text-white/40">Activación:</span>{" "}
-                                  {formatDateTime(tag.activatedAt || tag.assignedAt)}
-                                </div>
-                                <div>
-                                  <span className="text-white/40">Principal:</span>{" "}
-                                  {tag.isPrimary ? "Sí" : "No"}
-                                </div>
-                              </div>
-
-                              {tag.lostMessage && tag.tagStatus === "lost" && (
-                                <div className="mt-4 rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4 text-sm text-orange-100">
-                                  <span className="text-orange-200/75">Mensaje de extravío:</span>{" "}
-                                  {tag.lostMessage}
-                                </div>
-                              )}
-
-                              {tag.retiredReason && tag.tagStatus === "retired" && (
-                                <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-100">
-                                  <span className="text-red-200/75">Motivo de retiro:</span>{" "}
-                                  {tag.retiredReason}
-                                </div>
-                              )}
-
-                              {showInlineAction && (
-                                <div className="mt-4 rounded-[24px] border border-white/10 bg-[#141410] p-5">
-                                  <div className="text-base font-semibold text-[#F5F0E8]">
-                                    {pendingAction.title}
-                                  </div>
-
-                                  <p className="mt-2 text-sm leading-7 text-white/60">
-                                    {pendingAction.mode === "lost"
-                                      ? "La placa dejará de mostrar sus datos normales hasta que la reactives."
-                                      : "La placa quedará inutilizable permanentemente y ya no podrá volver a activarse."}
-                                  </p>
-
-                                  <div className="mt-4">
-                                    <label className="mb-2 block text-sm text-white/80">
+                                    <p className="mt-2 text-sm leading-7 text-white/60">
                                       {pendingAction.mode === "lost"
-                                        ? "Mensaje opcional"
-                                        : "Motivo opcional"}
-                                    </label>
-                                    <textarea
-                                      value={actionNote}
-                                      onChange={(e) => setActionNote(e.target.value)}
-                                      placeholder={pendingAction.placeholder}
-                                      rows={4}
-                                      className="w-full rounded-2xl border border-white/8 bg-[#0F0F0C] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50"
-                                    />
-                                  </div>
+                                        ? "La placa pasará a estado extraviado hasta que la reactives."
+                                        : "La placa quedará retirada permanentemente y no podrá volver a activarse."}
+                                    </p>
 
-                                  <div className="mt-4 flex flex-wrap gap-3">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setPendingAction(null);
-                                        setActionNote("");
-                                      }}
-                                      className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                                    >
-                                      Cancelar
-                                    </button>
+                                    <div className="mt-4">
+                                      <FieldLabel>
+                                        {pendingAction.mode === "lost"
+                                          ? "Mensaje opcional"
+                                          : "Motivo opcional"}
+                                      </FieldLabel>
 
-                                    <button
-                                      type="button"
-                                      disabled={isBusy}
-                                      onClick={() => {
-                                        if (!pendingAction) return;
-
-                                        if (pendingAction.mode === "lost") {
-                                          void runTagStatusUpdate(
-                                            tag.petTagId,
-                                            "lost",
-                                            actionNote.trim() || null,
-                                            null
-                                          );
+                                      <TextArea
+                                        value={actionNote}
+                                        onChange={(e) =>
+                                          setActionNote(e.target.value)
                                         }
+                                        placeholder={pendingAction.placeholder}
+                                        rows={4}
+                                      />
+                                    </div>
 
-                                        if (pendingAction.mode === "retired") {
-                                          void runTagStatusUpdate(
-                                            tag.petTagId,
-                                            "retired",
-                                            null,
-                                            actionNote.trim() || null
-                                          );
-                                        }
-                                      }}
-                                      className="rounded-2xl bg-[#E8C547] px-4 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                                    >
-                                      {isBusy
-                                        ? "Guardando..."
-                                        : pendingAction.confirmLabel}
-                                    </button>
+                                    <div className="mt-4 grid gap-3 sm:flex sm:flex-wrap">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setPendingAction(null);
+                                          setActionNote("");
+                                        }}
+                                        className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
+                                      >
+                                        Cancelar
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        disabled={isBusy}
+                                        onClick={() => {
+                                          if (!pendingAction) return;
+
+                                          if (pendingAction.mode === "lost") {
+                                            void runTagStatusUpdate(
+                                              tag.petTagId,
+                                              "lost",
+                                              actionNote.trim() || null,
+                                              null
+                                            );
+                                          }
+
+                                          if (pendingAction.mode === "retired") {
+                                            void runTagStatusUpdate(
+                                              tag.petTagId,
+                                              "retired",
+                                              null,
+                                              actionNote.trim() || null
+                                            );
+                                          }
+                                        }}
+                                        className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3.5"
+                                      >
+                                        {isBusy
+                                          ? "Guardando..."
+                                          : pendingAction.confirmLabel}
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                            </div>
+                                )}
+                              </div>
 
-                            <div>
                               <div className="rounded-[24px] border border-white/10 bg-[#141410] p-5">
                                 <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
                                   Acciones
                                 </div>
 
                                 <div className="mt-4 grid gap-3">
-                                  {!tag.isPrimary && tag.tagStatus === "activated" && (
-                                    <button
-                                      type="button"
+                                  {canSetPrimary && (
+                                    <ActionButton
                                       disabled={isBusy}
-                                      onClick={() => void handleSetPrimary(tag.petTagId)}
-                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm font-medium text-[#F5F0E8] transition hover:bg-[#E8C547]/15 disabled:cursor-not-allowed disabled:opacity-70"
+                                      variant="yellow"
+                                      icon={Star}
+                                      onClick={() =>
+                                        void handleSetPrimary(tag.petTagId)
+                                      }
                                     >
-                                      {isBusy ? "Actualizando..." : "Marcar como principal"}
-                                    </button>
+                                      {isBusy
+                                        ? "Actualizando..."
+                                        : "Marcar como principal"}
+                                    </ActionButton>
                                   )}
 
                                   {canSuspend && (
-                                    <button
-                                      type="button"
+                                    <ActionButton
                                       disabled={isBusy}
+                                      variant="neutral"
+                                      icon={ShieldCheck}
                                       onClick={() => {
                                         const ok = window.confirm(
                                           "¿Seguro que quieres suspender esta placa?"
                                         );
                                         if (!ok) return;
+
                                         void runTagStatusUpdate(
                                           tag.petTagId,
                                           "suspended",
@@ -928,21 +1030,22 @@ export default function MyTagsPage() {
                                           null
                                         );
                                       }}
-                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-70"
                                     >
                                       Suspender
-                                    </button>
+                                    </ActionButton>
                                   )}
 
                                   {canReactivate && (
-                                    <button
-                                      type="button"
+                                    <ActionButton
                                       disabled={isBusy}
+                                      variant="green"
+                                      icon={RotateCcw}
                                       onClick={() => {
                                         const ok = window.confirm(
                                           "¿Seguro que quieres reactivar esta placa?"
                                         );
                                         if (!ok) return;
+
                                         void runTagStatusUpdate(
                                           tag.petTagId,
                                           "activated",
@@ -950,54 +1053,63 @@ export default function MyTagsPage() {
                                           null
                                         );
                                       }}
-                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-[#2D5A27]/30 bg-[#2D5A27]/15 px-4 py-3 text-sm font-medium text-green-100 transition hover:bg-[#2D5A27]/20 disabled:cursor-not-allowed disabled:opacity-70"
                                     >
                                       Reactivar
-                                    </button>
+                                    </ActionButton>
                                   )}
 
                                   {canMarkLost && (
-                                    <button
-                                      type="button"
+                                    <ActionButton
                                       disabled={isBusy}
-                                      onClick={() => openLostAction(tag.petTagId)}
-                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-orange-400/20 bg-orange-400/10 px-4 py-3 text-sm font-medium text-orange-100 transition hover:bg-orange-400/15 disabled:cursor-not-allowed disabled:opacity-70"
+                                      variant="orange"
+                                      icon={AlertTriangle}
+                                      onClick={() =>
+                                        openLostAction(tag.petTagId)
+                                      }
                                     >
                                       Marcar como extraviada
-                                    </button>
+                                    </ActionButton>
                                   )}
 
                                   {canRetire && (
-                                    <button
-                                      type="button"
+                                    <ActionButton
                                       disabled={isBusy}
-                                      onClick={() => openRetiredAction(tag.petTagId)}
-                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm font-medium text-red-100 transition hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-70"
+                                      variant="red"
+                                      icon={Archive}
+                                      onClick={() =>
+                                        openRetiredAction(tag.petTagId)
+                                      }
                                     >
                                       Retirar placa
-                                    </button>
+                                    </ActionButton>
                                   )}
 
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void navigator.clipboard.writeText(tag.code)
-                                    }
-                                    className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                  <ActionButton
+                                    variant="neutral"
+                                    icon={Copy}
+                                    onClick={() => void copyTagCode(tag.code)}
                                   >
                                     Copiar código
-                                  </button>
+                                  </ActionButton>
+
+                                  <Link
+                                    to={`/mis-mascotas/${tag.petId}`}
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                  >
+                                    <PawPrint className="h-4 w-4" />
+                                    Ver mascota
+                                  </Link>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </>
-            )}
+                          </article>
+                        );
+                      })
+                    )}
+                  </section>
+                </>
+              )}
+            </div>
           </div>
         </section>
       </main>
@@ -1007,28 +1119,116 @@ export default function MyTagsPage() {
   );
 }
 
-function StatCard({
+function MetricCard({
+  icon: Icon,
   label,
   value,
-  variant,
+  description,
+  highlight = false,
 }: {
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
-  value: number;
-  variant: "green" | "yellow" | "neutral";
+  value: string | number;
+  description: string;
+  highlight?: boolean;
 }) {
-  const variantClass =
-    variant === "green"
-      ? "border-[#2D5A27]/60 bg-[#12311c]"
-      : variant === "yellow"
-      ? "border-[#E8C547]/15 bg-[#E8C547]/8"
-      : "border-white/8 bg-white/[0.04]";
-
   return (
-    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
-      <div className="text-sm uppercase tracking-[0.14em] text-white/45">
+    <div
+      className={`rounded-[22px] border p-4 sm:rounded-[28px] sm:p-5 ${
+        highlight
+          ? "border-[#E8C547]/20 bg-[#E8C547]/10"
+          : "border-white/10 bg-white/[0.045]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-[11px]">
+          {label}
+        </div>
+
+        <div
+          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
+            highlight
+              ? "bg-[#E8C547]/14 text-[#E8C547]"
+              : "bg-white/8 text-white/60"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+
+      <div className="mt-4 text-3xl font-semibold text-[#F5F0E8]">
+        {value}
+      </div>
+
+      <p className="mt-2 hidden text-sm leading-7 text-white/62 sm:block">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
-      <div className="mt-3 text-4xl font-semibold text-[#E8C547]">{value}</div>
+      <div className="mt-2 break-words text-sm font-medium text-white">
+        {value}
+      </div>
     </div>
+  );
+}
+
+function StatusPill({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className: string;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] ${className}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ActionButton({
+  children,
+  icon: Icon,
+  variant,
+  disabled = false,
+  onClick,
+}: {
+  children: React.ReactNode;
+  icon: React.ComponentType<{ className?: string }>;
+  variant: "yellow" | "green" | "orange" | "red" | "neutral";
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const variantClass =
+    variant === "yellow"
+      ? "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#F5F0E8] hover:bg-[#E8C547]/15"
+      : variant === "green"
+        ? "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-100 hover:bg-[#2D5A27]/20"
+        : variant === "orange"
+          ? "border-orange-400/20 bg-orange-400/10 text-orange-100 hover:bg-orange-400/15"
+          : variant === "red"
+            ? "border-red-400/20 bg-red-400/10 text-red-100 hover:bg-red-400/15"
+            : "border-white/10 text-white/85 hover:bg-white/5";
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-70 ${variantClass}`}
+    >
+      <Icon className="h-4 w-4" />
+      {children}
+    </button>
   );
 }

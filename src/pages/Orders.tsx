@@ -1,9 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Eye,
+  MessageCircle,
+  PackageCheck,
+  PencilLine,
+  Plus,
+  Repeat2,
+  ShoppingBag,
+  Truck,
+  XCircle,
+} from "lucide-react";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { buildWhatsAppUrl } from "../config/contact";
 
 type OrderStatus =
   | "draft"
@@ -45,10 +60,13 @@ type OrderRow = {
   order_number: string;
   status: OrderStatus;
   total: number;
+  currency: string;
   created_at: string;
   sales_channel: string;
   order_items: OrderItemRow[];
 };
+
+type OrderWhatsappAction = "consult" | "change" | "cancel" | "repeat";
 
 function getStatusLabel(status: OrderStatus) {
   switch (status) {
@@ -102,20 +120,14 @@ function getStatusHint(status: OrderStatus) {
 
 function getStatusClass(status: OrderStatus) {
   switch (status) {
-    case "draft":
-      return "border-white/10 bg-white/5 text-white/75";
     case "pending_payment":
-      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#E8C547]";
     case "payment_submitted":
-      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#E8C547]";
+      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]";
     case "paid":
-      return "border-white/10 bg-white/5 text-white/85";
     case "in_production":
-      return "border-white/10 bg-white/5 text-white/85";
     case "ready":
-      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#F5F0E8]";
     case "shipped":
-      return "border-white/10 bg-white/5 text-white/85";
+      return "border-blue-400/20 bg-blue-400/10 text-blue-200";
     case "delivered":
       return "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200";
     case "cancelled":
@@ -130,11 +142,24 @@ function formatOrderDate(value: string) {
     return new Date(value).toLocaleDateString("es-PE", {
       year: "numeric",
       month: "short",
-      day: "numeric",
+      day: "2-digit",
     });
   } catch {
     return value;
   }
+}
+
+function formatMoney(
+  value: number | string | null | undefined,
+  currency = "PEN"
+) {
+  const amount = Number(value || 0);
+
+  if (currency === "PEN") {
+    return `S/ ${amount.toFixed(2)}`;
+  }
+
+  return `${amount.toFixed(2)} ${currency}`;
 }
 
 function getPlanLabel(plan: SoldPlanType) {
@@ -149,6 +174,21 @@ function getPlanLabel(plan: SoldPlanType) {
       return "Otro";
     default:
       return plan;
+  }
+}
+
+function getDesignLabel(design: DesignType) {
+  switch (design) {
+    case "generic":
+      return "Genérico";
+    case "custom":
+      return "Personalizado";
+    case "partner":
+      return "Aliado";
+    case "limited":
+      return "Edición limitada";
+    default:
+      return design;
   }
 }
 
@@ -211,6 +251,107 @@ function getSizeLabelFromData(custom: CustomizationData) {
   return null;
 }
 
+function canRequestChange(status: OrderStatus) {
+  return (
+    status === "pending_payment" ||
+    status === "payment_submitted" ||
+    status === "paid" ||
+    status === "in_production" ||
+    status === "ready"
+  );
+}
+
+function canRequestCancellation(status: OrderStatus) {
+  return (
+    status === "pending_payment" ||
+    status === "payment_submitted" ||
+    status === "paid"
+  );
+}
+
+function canRepeatOrder(status: OrderStatus) {
+  return status === "delivered" || status === "cancelled";
+}
+
+function getChangeLabel(status: OrderStatus) {
+  if (status === "pending_payment") return "Modificar pedido";
+  if (status === "in_production" || status === "ready") return "Consultar cambios";
+  return "Solicitar cambio";
+}
+
+function buildOrderSummaryLines(order: OrderRow) {
+  const lines: string[] = [];
+
+  lines.push(`Pedido: ${order.order_number}`);
+  lines.push(`Estado actual: ${getStatusLabel(order.status)}`);
+  lines.push(`Fecha: ${formatOrderDate(order.created_at)}`);
+  lines.push(`Canal: ${getSalesChannelLabel(order.sales_channel)}`);
+  lines.push("");
+
+  (order.order_items ?? []).forEach((item, index) => {
+    const custom = item.customization_data || null;
+    const colorLabel = getColorLabelFromData(custom);
+    const shapeLabel = getShapeLabelFromData(custom);
+    const sizeLabel = getSizeLabelFromData(custom);
+
+    lines.push(`Placa ${index + 1}`);
+    lines.push(`Tipo: ${getPlanLabel(item.sold_plan_type)}`);
+
+    if (item.sold_plan_type === "custom" && custom?.pet_name) {
+      lines.push(`Nombre: ${custom.pet_name}`);
+    }
+
+    if (colorLabel) lines.push(`Color: ${colorLabel}`);
+    if (shapeLabel) lines.push(`Forma: ${shapeLabel}`);
+    if (sizeLabel) lines.push(`Tamaño: ${sizeLabel}`);
+
+    lines.push(`Cantidad: ${Number(item.quantity || 0)}`);
+    lines.push(`Precio: ${formatMoney(item.unit_price, order.currency)}`);
+    lines.push("");
+  });
+
+  lines.push(`Total: ${formatMoney(order.total, order.currency)}`);
+
+  return lines;
+}
+
+function buildOrderWhatsappMessage(
+  order: OrderRow,
+  action: OrderWhatsappAction
+) {
+  const lines: string[] = [];
+
+  if (action === "consult") {
+    lines.push(`Hola, quiero consultar por mi pedido ${order.order_number}.`);
+  }
+
+  if (action === "change") {
+    lines.push(`Hola, quiero solicitar un cambio en mi pedido ${order.order_number}.`);
+    lines.push("");
+    lines.push("Cambio que deseo realizar:");
+  }
+
+  if (action === "cancel") {
+    lines.push(`Hola, quiero solicitar la cancelación de mi pedido ${order.order_number}.`);
+    lines.push("");
+    lines.push("Motivo de cancelación:");
+  }
+
+  if (action === "repeat") {
+    lines.push(`Hola, quiero repetir o hacer un pedido similar al ${order.order_number}.`);
+  }
+
+  lines.push("");
+  lines.push("Detalle del pedido:");
+  lines.push(...buildOrderSummaryLines(order));
+
+  return lines.join("\n");
+}
+
+function getOrderWhatsappUrl(order: OrderRow, action: OrderWhatsappAction) {
+  return buildWhatsAppUrl(buildOrderWhatsappMessage(order, action));
+}
+
 export default function Orders() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -221,7 +362,13 @@ export default function Orders() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) return;
+
+    if (!user) {
+      setOrders([]);
+      setErrorMsg("");
+      setLoading(false);
+      return;
+    }
 
     let isMounted = true;
 
@@ -238,6 +385,7 @@ export default function Orders() {
             order_number,
             status,
             total,
+            currency,
             created_at,
             sales_channel,
             order_items (
@@ -272,9 +420,7 @@ export default function Orders() {
             : "No se pudieron cargar tus pedidos."
         );
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -287,34 +433,79 @@ export default function Orders() {
 
   const totalOrders = orders.length;
 
-  const activeOrders = useMemo(
+  const pendingOrders = useMemo(
     () =>
       orders.filter(
-        (order) => order.status !== "delivered" && order.status !== "cancelled"
+        (order) =>
+          order.status === "pending_payment" ||
+          order.status === "payment_submitted"
       ).length,
     [orders]
   );
 
-  const totalSpent = useMemo(
-    () => orders.reduce((sum, order) => sum + Number(order.total || 0), 0),
+  const productionOrders = useMemo(
+    () =>
+      orders.filter(
+        (order) =>
+          order.status === "paid" ||
+          order.status === "in_production" ||
+          order.status === "ready"
+      ).length,
     [orders]
   );
 
-  const totalPlates = useMemo(
-    () =>
-      orders.reduce(
-        (sum, order) =>
-          sum +
-          (order.order_items ?? []).reduce(
-            (itemsSum, item) => itemsSum + Number(item.quantity || 0),
-            0
-          ),
-        0
-      ),
+  const shippedOrders = useMemo(
+    () => orders.filter((order) => order.status === "shipped").length,
+    [orders]
+  );
+
+  const deliveredOrders = useMemo(
+    () => orders.filter((order) => order.status === "delivered").length,
     [orders]
   );
 
   const showLoading = authLoading || loading;
+
+  if (!authLoading && !user) {
+    return (
+      <>
+        <Header />
+
+        <main className="min-h-screen bg-[#1A1A14] text-white">
+          <section className="mokko-container py-12">
+            <div className="mx-auto max-w-4xl rounded-[32px] border border-white/10 bg-white/[0.04] px-6 py-12">
+              <div className="text-2xl font-semibold">
+                Inicia sesión para ver tus pedidos
+              </div>
+
+              <p className="mt-3 text-sm leading-7 text-white/70">
+                Necesitas una cuenta Mokko para revisar tu historial de pedidos,
+                estados y detalles de placas.
+              </p>
+
+              <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
+                <Link
+                  to="/login?next=/mis-pedidos"
+                  className="inline-flex w-full items-center justify-center rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
+                >
+                  Iniciar sesión
+                </Link>
+
+                <Link
+                  to="/register?next=/mis-pedidos"
+                  className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
+                >
+                  Crear cuenta
+                </Link>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <Footer />
+      </>
+    );
+  }
 
   return (
     <>
@@ -324,253 +515,485 @@ export default function Orders() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
+          <div className="mokko-container relative z-10 py-7 md:py-14">
             <div className="mx-auto max-w-6xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Mis pedidos
-              </span>
+              <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[36px] md:p-8">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-5">
+                    <span className="mokko-badge mokko-badge-primary w-fit">
+                      Mis pedidos
+                    </span>
 
-              <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    Historial de <span className="text-[#E8C547]">pedidos</span>
-                  </h1>
+                    <div className="space-y-4">
+                      <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                        Historial de{" "}
+                        <span className="text-[#E8C547]">pedidos</span>
+                      </h1>
 
-                  <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Aquí puedes revisar tus pedidos, su estado actual y el detalle
-                    de las placas que solicitaste.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => navigate("/pedido")}
-                  className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
-                >
-                  Hacer nuevo pedido
-                </button>
-              </div>
-            </div>
-
-            {errorMsg && (
-              <div className="mx-auto mt-8 max-w-6xl rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                {errorMsg}
-              </div>
-            )}
-
-            {showLoading ? (
-              <div className="mx-auto mt-8 max-w-6xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
-                Cargando pedidos...
-              </div>
-            ) : (
-              <>
-                <div className="mx-auto mt-8 grid max-w-6xl gap-4 md:grid-cols-4">
-                  <div className="rounded-[28px] border border-[#2D5A27]/60 bg-[#12311c] p-6">
-                    <div className="text-sm uppercase tracking-[0.14em] text-white/45">
-                      Pedidos
-                    </div>
-                    <div className="mt-3 text-4xl font-semibold text-[#E8C547]">
-                      {totalOrders}
-                    </div>
-                    <p className="mt-2 text-sm leading-7 text-white/70">
-                      Total de pedidos registrados.
-                    </p>
-                  </div>
-
-                  <div className="rounded-[28px] border border-white/8 bg-white/[0.04] p-6">
-                    <div className="text-sm uppercase tracking-[0.14em] text-white/45">
-                      Activos
-                    </div>
-                    <div className="mt-3 text-4xl font-semibold text-[#E8C547]">
-                      {activeOrders}
-                    </div>
-                    <p className="mt-2 text-sm leading-7 text-white/70">
-                      Pedidos aún en proceso.
-                    </p>
-                  </div>
-
-                  <div className="rounded-[28px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-6">
-                    <div className="text-sm uppercase tracking-[0.14em] text-white/45">
-                      Placas
-                    </div>
-                    <div className="mt-3 text-4xl font-semibold text-[#E8C547]">
-                      {totalPlates}
-                    </div>
-                    <p className="mt-2 text-sm leading-7 text-white/70">
-                      Placas pedidas en total.
-                    </p>
-                  </div>
-
-                  <div className="rounded-[28px] border border-white/8 bg-white/[0.04] p-6">
-                    <div className="text-sm uppercase tracking-[0.14em] text-white/45">
-                      Total estimado
-                    </div>
-                    <div className="mt-3 text-4xl font-semibold text-[#E8C547]">
-                      S/ {totalSpent.toFixed(0)}
-                    </div>
-                    <p className="mt-2 text-sm leading-7 text-white/70">
-                      Suma histórica de tus pedidos.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mx-auto mt-8 max-w-6xl">
-                  {orders.length === 0 ? (
-                    <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
-                      <div className="text-2xl font-semibold">
-                        Aún no tienes pedidos
-                      </div>
-                      <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65">
-                        Cuando hagas tu primer pedido Mokko, aquí podrás ver el
-                        número de orden, el estado y el detalle de las placas.
+                      <p className="max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
+                        Revisa tus pedidos, su estado actual y el detalle de las
+                        placas solicitadas.
                       </p>
-
-                      <button
-                        type="button"
-                        onClick={() => navigate("/pedido")}
-                        className="mt-6 rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
-                      >
-                        Hacer mi primer pedido
-                      </button>
                     </div>
-                  ) : (
-                    <div className="grid gap-5">
-                      {orders.map((order) => (
-                        <div
-                          key={order.id}
-                          className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm"
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate("/pedido")}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Hacer nuevo pedido
+                  </button>
+                </div>
+              </div>
+
+              {errorMsg && (
+                <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                  {errorMsg}
+                </div>
+              )}
+
+              {showLoading ? (
+                <div className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.04] p-8 text-center text-white/65 shadow-2xl backdrop-blur-sm md:rounded-[32px]">
+                  Cargando pedidos...
+                </div>
+              ) : (
+                <>
+                  <section className="mt-7 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+                    <MetricCard
+                      icon={ShoppingBag}
+                      label="Pedidos"
+                      value={totalOrders}
+                      description="Registrados."
+                    />
+
+                    <MetricCard
+                      icon={AlertTriangle}
+                      label="Pendientes"
+                      value={pendingOrders}
+                      description="Pago/validación."
+                      highlight={pendingOrders > 0}
+                    />
+
+                    <MetricCard
+                      icon={PackageCheck}
+                      label="En preparación"
+                      value={productionOrders}
+                      description="Producción/listos."
+                      highlight={productionOrders > 0}
+                    />
+
+                    <MetricCard
+                      icon={Truck}
+                      label="Enviados"
+                      value={shippedOrders}
+                      description="En camino."
+                      highlight={shippedOrders > 0}
+                    />
+
+                    <MetricCard
+                      icon={CheckCircle2}
+                      label="Entregados"
+                      value={deliveredOrders}
+                      description="Completados."
+                      highlight={deliveredOrders > 0}
+                    />
+                  </section>
+
+                  <section className="mt-7">
+                    {orders.length === 0 ? (
+                      <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm md:rounded-[32px]">
+                        <div className="text-2xl font-semibold">
+                          Aún no tienes pedidos
+                        </div>
+
+                        <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65">
+                          Cuando hagas tu primer pedido Mokko, aquí podrás ver el
+                          número de orden, el estado y el detalle de las placas.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => navigate("/pedido")}
+                          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
                         >
-                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-3">
-                                <h2 className="text-2xl font-semibold">
-                                  {order.order_number}
-                                </h2>
+                          <Plus className="h-4 w-4" />
+                          Hacer mi primer pedido
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid gap-5">
+                        {orders.map((order) => {
+                          const platesCount = (order.order_items ?? []).reduce(
+                            (sum, item) => sum + Number(item.quantity || 0),
+                            0
+                          );
 
-                                <span
-                                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getStatusClass(
-                                    order.status
-                                  )}`}
-                                >
-                                  {getStatusLabel(order.status)}
-                                </span>
-                              </div>
+                          const showChange = canRequestChange(order.status);
+                          const showCancel = canRequestCancellation(order.status);
+                          const showRepeat = canRepeatOrder(order.status);
 
-                              <div className="mt-2 text-sm text-white/55">
-                                {getStatusHint(order.status)}
-                              </div>
+                          return (
+                            <article
+                              key={order.id}
+                              className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm transition hover:border-[#E8C547]/20 hover:bg-white/[0.055] md:rounded-[32px] md:p-6"
+                            >
+                              <div className="grid gap-6 lg:grid-cols-[1.06fr_0.94fr]">
+                                <div className="min-w-0">
+                                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <h2 className="text-2xl font-semibold text-[#F5F0E8]">
+                                          {order.order_number}
+                                        </h2>
 
-                              <div className="mt-3 flex flex-wrap gap-4 text-sm text-white/55">
-                                <span>Fecha: {formatOrderDate(order.created_at)}</span>
-                                <span>Canal: {getSalesChannelLabel(order.sales_channel)}</span>
-                                <span>
-                                  Placas:{" "}
-                                  {(order.order_items ?? []).reduce(
-                                    (sum, item) => sum + Number(item.quantity || 0),
-                                    0
-                                  )}
-                                </span>
-                              </div>
-                            </div>
+                                        <StatusPill
+                                          className={getStatusClass(
+                                            order.status
+                                          )}
+                                        >
+                                          {getStatusLabel(order.status)}
+                                        </StatusPill>
+                                      </div>
 
-                            <div className="rounded-2xl border border-white/10 bg-[#141410] px-4 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                                Total
-                              </div>
-                              <div className="mt-2 text-xl font-semibold text-[#E8C547]">
-                                S/ {Number(order.total || 0).toFixed(2)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-6 grid gap-4 md:grid-cols-2">
-                            {(order.order_items ?? []).map((item, index) => {
-                              const custom = item.customization_data || null;
-                              const colorLabel = getColorLabelFromData(custom);
-                              const shapeLabel = getShapeLabelFromData(custom);
-                              const sizeLabel = getSizeLabelFromData(custom);
-
-                              return (
-                                <div
-                                  key={item.id}
-                                  className="rounded-[24px] border border-white/10 bg-[#141410] p-5"
-                                >
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="text-base font-semibold">
-                                      Placa {index + 1}
+                                      <p className="mt-2 text-sm leading-7 text-white/60">
+                                        {getStatusHint(order.status)}
+                                      </p>
                                     </div>
 
-                                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                                      {getPlanLabel(item.sold_plan_type)}
+                                    <div className="rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 p-4 sm:min-w-[150px]">
+                                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                                        Total
+                                      </div>
+                                      <div className="mt-2 text-xl font-semibold text-[#E8C547]">
+                                        {formatMoney(
+                                          order.total,
+                                          order.currency
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
 
-                                  <div className="mt-4 grid gap-2 text-sm text-white/70">
-                                    {item.sold_plan_type === "custom" &&
-                                      custom?.pet_name && (
-                                        <div>
-                                          <span className="text-white/45">Nombre:</span>{" "}
-                                          {String(custom.pet_name)}
-                                        </div>
+                                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                                    <InfoItem
+                                      label="Fecha"
+                                      value={formatOrderDate(order.created_at)}
+                                    />
+
+                                    <InfoItem
+                                      label="Canal"
+                                      value={getSalesChannelLabel(
+                                        order.sales_channel
                                       )}
+                                    />
 
-                                    {colorLabel && (
-                                      <div>
-                                        <span className="text-white/45">Color:</span>{" "}
-                                        {colorLabel}
-                                      </div>
+                                    <InfoItem
+                                      label="Placas"
+                                      value={String(platesCount)}
+                                    />
+                                  </div>
+
+                                  <div className="mt-5 grid gap-3 md:grid-cols-2">
+                                    {(order.order_items ?? []).map(
+                                      (item, index) => {
+                                        const custom =
+                                          item.customization_data || null;
+                                        const colorLabel =
+                                          getColorLabelFromData(custom);
+                                        const shapeLabel =
+                                          getShapeLabelFromData(custom);
+                                        const sizeLabel =
+                                          getSizeLabelFromData(custom);
+
+                                        return (
+                                          <div
+                                            key={item.id}
+                                            className="rounded-[24px] border border-white/10 bg-[#141410] p-4"
+                                          >
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div>
+                                                <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                                                  Placa {index + 1}
+                                                </div>
+                                                <div className="mt-2 text-base font-semibold text-white">
+                                                  {getPlanLabel(
+                                                    item.sold_plan_type
+                                                  )}
+                                                </div>
+                                              </div>
+
+                                              <StatusPill className="border-white/10 bg-white/5 text-white/70">
+                                                {getDesignLabel(
+                                                  item.design_type
+                                                )}
+                                              </StatusPill>
+                                            </div>
+
+                                            <div className="mt-4 grid gap-2 text-sm leading-6 text-white/70">
+                                              {item.sold_plan_type ===
+                                                "custom" &&
+                                                custom?.pet_name && (
+                                                  <SmallLine
+                                                    label="Nombre"
+                                                    value={String(
+                                                      custom.pet_name
+                                                    )}
+                                                  />
+                                                )}
+
+                                              {colorLabel && (
+                                                <SmallLine
+                                                  label="Color"
+                                                  value={colorLabel}
+                                                />
+                                              )}
+
+                                              {shapeLabel && (
+                                                <SmallLine
+                                                  label="Forma"
+                                                  value={shapeLabel}
+                                                />
+                                              )}
+
+                                              {sizeLabel && (
+                                                <SmallLine
+                                                  label="Tamaño"
+                                                  value={sizeLabel}
+                                                />
+                                              )}
+
+                                              <SmallLine
+                                                label="Cantidad"
+                                                value={String(
+                                                  Number(item.quantity || 0)
+                                                )}
+                                              />
+
+                                              <SmallLine
+                                                label="Precio"
+                                                value={formatMoney(
+                                                  item.unit_price,
+                                                  order.currency
+                                                )}
+                                              />
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="rounded-[24px] border border-white/10 bg-[#141410] p-5">
+                                  <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                                    Acciones
+                                  </div>
+
+                                  <div className="mt-4 grid gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        navigate(`/mis-pedidos/${order.id}`)
+                                      }
+                                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-4 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                      Ver detalle
+                                    </button>
+
+                                    <ActionLink
+                                      href={getOrderWhatsappUrl(order, "consult")}
+                                      icon={MessageCircle}
+                                      variant="neutral"
+                                    >
+                                      Consultar pedido
+                                    </ActionLink>
+
+                                    {showChange && (
+                                      <ActionLink
+                                        href={getOrderWhatsappUrl(order, "change")}
+                                        icon={PencilLine}
+                                        variant="neutral"
+                                      >
+                                        {getChangeLabel(order.status)}
+                                      </ActionLink>
                                     )}
 
-                                    {shapeLabel && (
-                                      <div>
-                                        <span className="text-white/45">Forma:</span>{" "}
-                                        {shapeLabel}
-                                      </div>
+                                    {showCancel && (
+                                      <ActionLink
+                                        href={getOrderWhatsappUrl(order, "cancel")}
+                                        icon={XCircle}
+                                        variant="red"
+                                      >
+                                        Solicitar cancelación
+                                      </ActionLink>
                                     )}
 
-                                    {sizeLabel && (
-                                      <div>
-                                        <span className="text-white/45">Tamaño:</span>{" "}
-                                        {sizeLabel}
-                                      </div>
+                                    {showRepeat && (
+                                      <ActionLink
+                                        href={getOrderWhatsappUrl(order, "repeat")}
+                                        icon={Repeat2}
+                                        variant="green"
+                                      >
+                                        Repetir pedido
+                                      </ActionLink>
                                     )}
 
-                                    <div>
-                                      <span className="text-white/45">Cantidad:</span>{" "}
-                                      {Number(item.quantity || 0)}
-                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate("/pedido")}
+                                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                      Nuevo pedido
+                                    </button>
+                                  </div>
 
-                                    <div>
-                                      <span className="text-white/45">Precio:</span>{" "}
-                                      S/ {Number(item.unit_price || 0).toFixed(2)}
+                                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-7 text-white/65">
+                                    <div className="flex items-start gap-2">
+                                      <Clock3 className="mt-1 h-4 w-4 shrink-0 text-[#E8C547]" />
+                                      <span>
+                                        Estado actual:{" "}
+                                        <span className="font-semibold text-white">
+                                          {getStatusLabel(order.status)}
+                                        </span>
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
-
-                          <div className="mt-6 flex flex-wrap gap-3">
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/mis-pedidos/${order.id}`)}
-                              className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                            >
-                              Ver detalle
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
+            </div>
           </div>
         </section>
       </main>
 
       <Footer />
     </>
+  );
+}
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  description,
+  highlight = false,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | number;
+  description: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[22px] border p-4 sm:rounded-[28px] sm:p-5 ${
+        highlight
+          ? "border-[#E8C547]/20 bg-[#E8C547]/10"
+          : "border-white/10 bg-white/[0.045]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-[11px]">
+          {label}
+        </div>
+
+        <div
+          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
+            highlight
+              ? "bg-[#E8C547]/14 text-[#E8C547]"
+              : "bg-white/8 text-white/60"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+
+      <div className="mt-4 break-words text-2xl font-semibold text-[#F5F0E8] sm:text-3xl">
+        {value}
+      </div>
+
+      <p className="mt-2 hidden text-sm leading-7 text-white/62 sm:block">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+        {label}
+      </div>
+      <div className="mt-2 break-words text-sm font-medium text-white">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SmallLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-white/45">{label}:</span>{" "}
+      <span className="text-white/78">{value}</span>
+    </div>
+  );
+}
+
+function StatusPill({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className: string;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] ${className}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ActionLink({
+  children,
+  href,
+  icon: Icon,
+  variant,
+}: {
+  children: React.ReactNode;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  variant: "neutral" | "red" | "green";
+}) {
+  const variantClass =
+    variant === "red"
+      ? "border-red-400/20 bg-red-400/10 text-red-100 hover:bg-red-400/15"
+      : variant === "green"
+        ? "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-100 hover:bg-[#2D5A27]/20"
+        : "border-white/10 text-white/85 hover:bg-white/5";
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition ${variantClass}`}
+    >
+      <Icon className="h-4 w-4" />
+      {children}
+    </a>
   );
 }

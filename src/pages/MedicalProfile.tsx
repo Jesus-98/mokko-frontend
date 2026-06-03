@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   CheckCircle2,
@@ -17,7 +17,7 @@ import { useAuth } from "../context/AuthContext";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../components/ui/CustomSelect";
-import { FieldLabel, TextInput } from "../components/ui/Field";
+import { DateInput, FieldLabel, TextInput } from "../components/ui/Field";
 
 type EspecieMascota = "dog" | "cat" | "other";
 type PlanVendido = "essential" | "custom" | "partner_batch" | "other";
@@ -97,9 +97,9 @@ function primeraRelacion<T>(valor: Relacion<T>): T | null {
 function etiquetaPlan(plan: PlanVendido | null | undefined): string {
   if (plan === "essential") return "Essential";
   if (plan === "custom") return "Custom";
-  if (plan === "partner_batch") return "Partner batch";
+  if (plan === "partner_batch") return "Lote aliado";
   if (plan === "other") return "Otro";
-  return "No definido";
+  return "Sin detectar";
 }
 
 function formatearFecha(valor: string | null | undefined): string {
@@ -161,7 +161,7 @@ export default function MedicalProfile() {
   });
 
   const claseTextArea =
-    "w-full rounded-2xl border border-white/10 bg-[#141410] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60";
+    "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-base text-white outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 sm:py-3.5";
 
   const opcionesTiposVacuna = useMemo<CustomSelectOption[]>(() => {
     return tiposVacuna.map((tipo) => ({
@@ -221,7 +221,7 @@ export default function MedicalProfile() {
         const mascotaActual = petData as Mascota;
         setMascota(mascotaActual);
 
-        const [perfilRes, activeTagRes, medicalRes, vacunasRes] =
+        const [perfilRes, activeTagsRes, medicalRes, vacunasRes] =
           await Promise.all([
             supabase
               .from("pet_profiles")
@@ -234,42 +234,40 @@ export default function MedicalProfile() {
               .select("tag_id, sold_plan_type")
               .eq("pet_id", petId)
               .eq("status", "active")
-              .order("assigned_at", { ascending: false })
-              .limit(1)
-              .maybeSingle(),
+              .order("assigned_at", { ascending: false }),
 
             supabase
               .from("pet_medical_profiles")
               .select(`
-              pet_id,
-              sterilized,
-              allergies_text,
-              conditions_text,
-              medications_text,
-              dietary_notes
-            `)
+                pet_id,
+                sterilized,
+                allergies_text,
+                conditions_text,
+                medications_text,
+                dietary_notes
+              `)
               .eq("pet_id", petId)
               .maybeSingle(),
 
             supabase
               .from("pet_vaccinations")
               .select(`
-              id,
-              pet_id,
-              vaccine_type_id,
-              applied_on,
-              expires_on,
-              dose_number,
-              notes,
-              vaccine_types (
                 id,
-                species,
-                name,
-                code,
-                recommended_frequency_months,
-                is_core
-              )
-            `)
+                pet_id,
+                vaccine_type_id,
+                applied_on,
+                expires_on,
+                dose_number,
+                notes,
+                vaccine_types (
+                  id,
+                  species,
+                  name,
+                  code,
+                  recommended_frequency_months,
+                  is_core
+                )
+              `)
               .eq("pet_id", petId)
               .order("applied_on", { ascending: false }),
           ]);
@@ -285,29 +283,38 @@ export default function MedicalProfile() {
           setPerfilMascota((perfilRes.data as PerfilMascota | null) ?? null);
         }
 
-        if (activeTagRes.error) {
-          console.error("Error cargando pet_tags:", activeTagRes.error);
+        if (activeTagsRes.error) {
+          console.error("Error cargando pet_tags:", activeTagsRes.error);
           setMensajeAdvertencia(
-            "No se pudo cargar la placa activa de la mascota."
+            "No se pudieron cargar las placas activas de la mascota."
           );
-        } else if (activeTagRes.data) {
-          const tagRow = activeTagRes.data as PetTagActivo;
-          setTagActivo(tagRow);
-
-          const { data: tagData, error: tagDataError } = await supabase
-            .from("tags")
-            .select("code")
-            .eq("id", tagRow.tag_id)
-            .maybeSingle();
-
-          if (tagDataError) {
-            console.error("Error cargando código de la placa:", tagDataError);
-          } else {
-            setCodigoTagActivo((tagData as TagResumen | null)?.code || "");
-          }
-        } else {
           setTagActivo(null);
           setCodigoTagActivo("");
+        } else {
+          const activeTags = (activeTagsRes.data ?? []) as PetTagActivo[];
+          const customTag = activeTags.find(
+            (tag) => tag.sold_plan_type === "custom"
+          );
+          const detectedTag = customTag ?? activeTags[0] ?? null;
+
+          setTagActivo(detectedTag);
+
+          if (detectedTag?.tag_id) {
+            const { data: tagData, error: tagDataError } = await supabase
+              .from("tags")
+              .select("code")
+              .eq("id", detectedTag.tag_id)
+              .maybeSingle();
+
+            if (tagDataError) {
+              console.error("Error cargando código de la placa:", tagDataError);
+              setCodigoTagActivo("");
+            } else {
+              setCodigoTagActivo((tagData as TagResumen | null)?.code || "");
+            }
+          } else {
+            setCodigoTagActivo("");
+          }
         }
 
         if (medicalRes.error) {
@@ -320,6 +327,7 @@ export default function MedicalProfile() {
           );
         } else if (medicalRes.data) {
           const data = medicalRes.data as PerfilMedico;
+
           setPerfilMedico({
             pet_id: data.pet_id,
             sterilized: !!data.sterilized,
@@ -378,6 +386,7 @@ export default function MedicalProfile() {
         }
       } catch (error) {
         console.error("Error cargando MedicalProfile:", error);
+
         setMensajeError(
           error instanceof Error
             ? error.message
@@ -410,12 +419,47 @@ export default function MedicalProfile() {
 
   const etiquetaRaza = useMemo(() => {
     if (!mascota) return null;
+
     const raza = primeraRelacion(mascota.pet_breeds);
+
     if (mascota.breed_custom?.trim()) return mascota.breed_custom.trim();
     if (raza?.name_es?.trim()) return raza.name_es.trim();
     if (raza?.name?.trim()) return raza.name.trim();
+
     return null;
   }, [mascota]);
+
+  const totalVacunas = vacunas.length;
+
+  const vacunasVencidas = useMemo(() => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    return vacunas.filter((vacuna) => {
+      if (!vacuna.expires_on) return false;
+      const fecha = new Date(vacuna.expires_on);
+      return !Number.isNaN(fecha.getTime()) && fecha < hoy;
+    }).length;
+  }, [vacunas]);
+
+  const vacunasPorVencer = useMemo(() => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const limite = new Date(hoy);
+    limite.setDate(limite.getDate() + 30);
+
+    return vacunas.filter((vacuna) => {
+      if (!vacuna.expires_on) return false;
+      const fecha = new Date(vacuna.expires_on);
+
+      return (
+        !Number.isNaN(fecha.getTime()) &&
+        fecha >= hoy &&
+        fecha <= limite
+      );
+    }).length;
+  }, [vacunas]);
 
   const actualizarCampo = <K extends keyof PerfilMedico>(
     campo: K,
@@ -443,9 +487,7 @@ export default function MedicalProfile() {
     setMensajeExito("");
   };
 
-  const guardarPerfilMedico = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  const guardarPerfilMedico = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!petId) {
@@ -455,7 +497,7 @@ export default function MedicalProfile() {
 
     if (!tieneFuncionesCustom) {
       setMensajeError(
-        "Esta mascota no tiene habilitado el perfil médico porque no cuenta con una placa Custom activa."
+        "Esta mascota no tiene habilitado el perfil médico porque no cuenta con funciones Custom."
       );
       return;
     }
@@ -487,6 +529,7 @@ export default function MedicalProfile() {
       setMensajeExito("Perfil médico actualizado correctamente.");
     } catch (error) {
       console.error("Error guardando perfil médico:", error);
+
       setMensajeError(
         error instanceof Error
           ? error.message
@@ -520,6 +563,7 @@ export default function MedicalProfile() {
 
     if (nuevaVacuna.dose_number.trim()) {
       const parsedDose = Number(nuevaVacuna.dose_number);
+
       if (Number.isNaN(parsedDose) || parsedDose <= 0) {
         setMensajeError("La dosis debe ser un número válido mayor a 0.");
         return;
@@ -577,6 +621,7 @@ export default function MedicalProfile() {
       setMensajeExito("Vacuna registrada correctamente.");
     } catch (error) {
       console.error("Error registrando vacuna:", error);
+
       setMensajeError(
         error instanceof Error
           ? error.message
@@ -596,7 +641,8 @@ export default function MedicalProfile() {
       const { error } = await supabase
         .from("pet_vaccinations")
         .delete()
-        .eq("id", vacunaId);
+        .eq("id", vacunaId)
+        .eq("pet_id", petId);
 
       if (error) {
         throw new Error(error.message || "No se pudo eliminar la vacuna.");
@@ -608,6 +654,7 @@ export default function MedicalProfile() {
       setMensajeExito("Vacuna eliminada correctamente.");
     } catch (error) {
       console.error("Error eliminando vacuna:", error);
+
       setMensajeError(
         error instanceof Error
           ? error.message
@@ -673,59 +720,17 @@ export default function MedicalProfile() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
-            <div className="mx-auto max-w-5xl">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <Link
-                  to={`/mis-mascotas/${petId}`}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/[0.08]"
-                >
-                  <ChevronLeft className="h-4.5 w-4.5" />
-                  Volver al detalle
-                </Link>
-              </div>
+          <div className="mokko-container relative z-10 py-7 md:py-14">
+            <div className="mx-auto max-w-6xl">
+              <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[36px] md:p-8">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-5">
+                    <span className="mokko-badge mokko-badge-primary w-fit">
+                      Perfil médico
+                    </span>
 
-              <div className="mt-6">
-                <span className="mokko-badge mokko-badge-primary w-fit">
-                  Perfil médico
-                </span>
-
-                <h1 className="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">
-                  Información médica de{" "}
-                  <span className="text-[#E8C547]">
-                    {mascota?.name || "tu mascota"}
-                  </span>
-                </h1>
-
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                  Guarda información importante para ayudar con mayor seguridad
-                  en caso de extravío.
-                </p>
-              </div>
-
-              {mensajeError && (
-                <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                  {mensajeError}
-                </div>
-              )}
-
-              {mensajeExito && (
-                <div className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                  {mensajeExito}
-                </div>
-              )}
-
-              {mensajeAdvertencia && !mensajeError && (
-                <div className="mt-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                  {mensajeAdvertencia}
-                </div>
-              )}
-
-              <div className="mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-                <div className="space-y-6">
-                  <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
-                    <div className="flex items-center gap-4">
-                      <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
                         {mascota?.photo_url ? (
                           <img
                             src={mascota.photo_url}
@@ -740,28 +745,133 @@ export default function MedicalProfile() {
                       </div>
 
                       <div>
-                        <div className="text-2xl font-semibold">
-                          {mascota?.name}
-                        </div>
-                        <div className="mt-1 text-sm text-white/60">
+                        <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                          {mascota?.name || "Tu mascota"}
+                        </h1>
+
+                        <p className="mt-2 text-sm leading-7 text-white/70 sm:text-base">
                           {etiquetaEspecie}
                           {etiquetaRaza ? ` • ${etiquetaRaza}` : ""}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {tieneFuncionesCustom ? (
+                            <StatusPill className="border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]">
+                              Ficha médica habilitada
+                            </StatusPill>
+                          ) : (
+                            <StatusPill className="border-red-400/20 bg-red-400/10 text-red-200">
+                              Ficha médica bloqueada
+                            </StatusPill>
+                          )}
+
+                          {codigoTagActivo ? (
+                            <StatusPill className="border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200">
+                              Placa {codigoTagActivo}
+                            </StatusPill>
+                          ) : (
+                            <StatusPill className="border-white/10 bg-white/5 text-white/65">
+                              Sin placa activa
+                            </StatusPill>
+                          )}
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="mt-6 grid gap-3">
+                  <div className="grid gap-3 sm:flex sm:flex-wrap">
+                    <Link
+                      to={`/mis-mascotas/${petId}`}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/[0.08] sm:w-auto sm:py-3.5"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Volver al detalle
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(`/mis-mascotas/${petId}/perfil-publico`)
+                      }
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
+                    >
+                      Perfil público
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {mensajeError && (
+                <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                  {mensajeError}
+                </div>
+              )}
+
+              {mensajeExito && (
+                <div className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
+                  {mensajeExito}
+                </div>
+              )}
+
+              {mensajeAdvertencia && !mensajeError && (
+                <div className="mt-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm leading-6 text-[#f6df8a]">
+                  {mensajeAdvertencia}
+                </div>
+              )}
+
+              <section className="mt-7 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+                <MetricCard
+                  icon={HeartPulse}
+                  label="Perfil"
+                  value={tieneFuncionesCustom ? "Activo" : "Bloqueado"}
+                  description="Según plan."
+                  highlight={tieneFuncionesCustom}
+                />
+
+                <MetricCard
+                  icon={Syringe}
+                  label="Vacunas"
+                  value={totalVacunas}
+                  description="Registradas."
+                />
+
+                <MetricCard
+                  icon={ShieldAlert}
+                  label="Vencidas"
+                  value={vacunasVencidas}
+                  description="Revisar."
+                  highlight={vacunasVencidas > 0}
+                />
+
+                <MetricCard
+                  icon={Sparkles}
+                  label="Por vencer"
+                  value={vacunasPorVencer}
+                  description="Próx. 30 días."
+                  highlight={vacunasPorVencer > 0}
+                />
+              </section>
+
+              <div className="mt-7 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+                <div className="order-2 grid content-start gap-6 lg:order-1">
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px]">
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-semibold">
+                        Resumen médico
+                      </h2>
+                      <p className="text-sm leading-7 text-white/65">
+                        Estado actual del perfil y funciones disponibles.
+                      </p>
+                    </div>
+
+                    <div className="mt-5 grid gap-3">
                       <ResumenItem
                         label="Placa activa"
                         value={codigoTagActivo || "Sin placa activa"}
                       />
                       <ResumenItem
                         label="Plan detectado"
-                        value={
-                          tagActivo
-                            ? etiquetaPlan(tagActivo.sold_plan_type)
-                            : "Sin detectar"
-                        }
+                        value={etiquetaPlan(tagActivo?.sold_plan_type)}
                       />
                       <ResumenItem
                         label="Perfil médico"
@@ -773,24 +883,25 @@ export default function MedicalProfile() {
                   </section>
 
                   {tieneFuncionesCustom ? (
-                    <section className="rounded-[32px] border border-[#E8C547]/25 bg-[#E8C547]/10 p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
-                      <div className="flex items-center gap-3">
-                        <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
+                    <section className="rounded-[28px] border border-[#E8C547]/25 bg-[#E8C547]/10 p-5 shadow-2xl sm:p-6 md:rounded-[32px]">
+                      <div className="flex items-start gap-3">
+                        <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
                           <Sparkles className="h-5 w-5" />
                         </div>
+
                         <div>
                           <h2 className="text-xl font-semibold text-white">
-                            Función extra Custom
+                            Función Custom activa
                           </h2>
                           <p className="mt-1 text-sm leading-7 text-white/75">
-                            Esta mascota tiene desbloqueado el perfil médico
-                            porque cuenta con una placa Custom activa.
+                            Esta mascota tiene desbloqueado el perfil médico.
+                            Puedes registrar datos médicos y vacunas.
                           </p>
                         </div>
                       </div>
                     </section>
                   ) : (
-                    <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
+                    <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl sm:p-6 md:rounded-[32px]">
                       <div className="flex items-center gap-3">
                         <LockKeyhole className="h-5 w-5 text-white/70" />
                         <h2 className="text-xl font-semibold">
@@ -799,18 +910,18 @@ export default function MedicalProfile() {
                       </div>
 
                       <p className="mt-4 text-sm leading-7 text-white/72">
-                        El perfil médico solo está disponible para mascotas con
-                        una placa Custom activa.
+                        El perfil médico está disponible para mascotas con
+                        funciones Custom habilitadas.
                       </p>
                     </section>
                   )}
                 </div>
 
                 {tieneFuncionesCustom ? (
-                  <div className="space-y-6">
+                  <div className="order-1 grid gap-6 lg:order-2">
                     <form
                       onSubmit={guardarPerfilMedico}
-                      className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]"
+                      className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px]"
                     >
                       <div className="space-y-6">
                         <section>
@@ -894,24 +1005,28 @@ export default function MedicalProfile() {
                                 event.target.value
                               )
                             }
-                            placeholder="Ej. Sin carbohidratos, dieta renal, alimento especial."
+                            placeholder="Ej. Dieta renal, alimento especial o restricciones."
                             className={claseTextArea}
                           />
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-6">
-                          <div className="inline-flex items-center gap-2 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-3 py-2 text-sm text-[#f6df8a]">
-                            <ShieldAlert className="h-4 w-4" />
-                            Se mostrará solo si el perfil público permite
-                            alertas médicas.
+                        <div className="grid gap-3 border-t border-white/10 pt-6 sm:flex sm:items-center sm:justify-between">
+                          <div className="rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-3 py-2 text-sm leading-6 text-[#f6df8a]">
+                            <div className="flex items-start gap-2">
+                              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                              <span>
+                                Se mostrará solo si el perfil público permite
+                                alertas médicas.
+                              </span>
+                            </div>
                           </div>
 
                           <button
                             type="submit"
                             disabled={guardando}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3.5"
                           >
-                            <CheckCircle2 className="h-4.5 w-4.5" />
+                            <CheckCircle2 className="h-4 w-4" />
                             {guardando
                               ? "Guardando..."
                               : "Guardar perfil médico"}
@@ -920,11 +1035,12 @@ export default function MedicalProfile() {
                       </div>
                     </form>
 
-                    <section className="rounded-[32px] border border-[#E8C547]/25 bg-[#E8C547]/10 p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
-                      <div className="flex items-center gap-3">
-                        <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
+                    <section className="rounded-[28px] border border-[#E8C547]/25 bg-[#E8C547]/10 p-5 shadow-2xl sm:p-6 md:rounded-[32px]">
+                      <div className="flex items-start gap-3">
+                        <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
                           <Syringe className="h-5 w-5" />
                         </div>
+
                         <div>
                           <h2 className="text-xl font-semibold text-white">
                             Vacunas
@@ -952,8 +1068,7 @@ export default function MedicalProfile() {
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div>
                             <FieldLabel>Fecha de aplicación</FieldLabel>
-                            <TextInput
-                              type="date"
+                            <DateInput
                               value={nuevaVacuna.applied_on}
                               onChange={(event) =>
                                 actualizarNuevaVacuna(
@@ -966,8 +1081,7 @@ export default function MedicalProfile() {
 
                           <div>
                             <FieldLabel>Fecha de vencimiento</FieldLabel>
-                            <TextInput
-                              type="date"
+                            <DateInput
                               value={nuevaVacuna.expires_on}
                               onChange={(event) =>
                                 actualizarNuevaVacuna(
@@ -1004,29 +1118,27 @@ export default function MedicalProfile() {
                             onChange={(event) =>
                               actualizarNuevaVacuna("notes", event.target.value)
                             }
-                            placeholder="Ej. Aplicada en veterinaria, reacción leve o comentario relevante."
+                            placeholder="Ej. Aplicada en veterinaria o comentario relevante."
                             className={claseTextArea}
                           />
                         </div>
 
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={registrarVacuna}
-                            disabled={guardandoVacuna}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                          >
-                            <Syringe className="h-4.5 w-4.5" />
-                            {guardandoVacuna
-                              ? "Guardando vacuna..."
-                              : "Agregar vacuna"}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={registrarVacuna}
+                          disabled={guardandoVacuna}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:justify-self-end sm:py-3.5"
+                        >
+                          <Syringe className="h-4 w-4" />
+                          {guardandoVacuna
+                            ? "Guardando vacuna..."
+                            : "Agregar vacuna"}
+                        </button>
                       </div>
 
                       <div className="mt-6 space-y-3">
                         {vacunas.length === 0 ? (
-                          <div className="rounded-[24px] border border-white/10 bg-[#141410] p-4 text-sm text-white/70">
+                          <div className="rounded-[24px] border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/70">
                             Aún no hay vacunas registradas.
                           </div>
                         ) : (
@@ -1078,7 +1190,7 @@ export default function MedicalProfile() {
                                 </div>
 
                                 {vacuna.notes?.trim() && (
-                                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75">
+                                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-white/75">
                                     {vacuna.notes}
                                   </div>
                                 )}
@@ -1090,7 +1202,7 @@ export default function MedicalProfile() {
                     </section>
                   </div>
                 ) : (
-                  <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
+                  <section className="order-1 rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px] lg:order-2">
                     <div className="flex items-center gap-3">
                       <LockKeyhole className="h-5 w-5 text-white/70" />
                       <h2 className="text-2xl font-semibold">
@@ -1100,16 +1212,26 @@ export default function MedicalProfile() {
 
                     <p className="mt-4 text-sm leading-7 text-white/72">
                       Para habilitar el perfil médico, esta mascota debe tener
-                      una placa Custom activa.
+                      funciones Custom activas.
                     </p>
 
-                    <div className="mt-6">
+                    <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
                       <button
                         type="button"
                         onClick={() => navigate("/pedido")}
-                        className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
+                        className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
                       >
                         Obtener placa Custom
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(`/mis-mascotas/${petId}/perfil-publico`)
+                        }
+                        className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
+                      >
+                        Volver al perfil público
                       </button>
                     </div>
                   </section>
@@ -1183,8 +1305,72 @@ function ToggleFila({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-1 h-5 w-5 rounded border-white/20 bg-transparent accent-[#E8C547]"
+        className="mt-1 h-5 w-5 shrink-0 rounded border-white/20 bg-transparent accent-[#E8C547]"
       />
     </label>
+  );
+}
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  description,
+  highlight = false,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | number;
+  description: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[22px] border p-4 sm:rounded-[28px] sm:p-5 ${
+        highlight
+          ? "border-[#E8C547]/20 bg-[#E8C547]/10"
+          : "border-white/10 bg-white/[0.045]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-[11px]">
+          {label}
+        </div>
+
+        <div
+          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
+            highlight
+              ? "bg-[#E8C547]/14 text-[#E8C547]"
+              : "bg-white/8 text-white/60"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+
+      <div className="mt-4 text-2xl font-semibold text-[#F5F0E8] sm:text-3xl">
+        {value}
+      </div>
+
+      <p className="mt-2 hidden text-sm leading-7 text-white/62 sm:block">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function StatusPill({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className: string;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] ${className}`}
+    >
+      {children}
+    </span>
   );
 }

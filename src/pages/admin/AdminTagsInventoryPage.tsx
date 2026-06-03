@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import { supabase } from "../../lib/supabase";
@@ -41,6 +48,7 @@ type TagRow = {
   sold_plan_type: SoldPlanType | null;
   is_fabricated: boolean;
   fabricated_at: string | null;
+  activated_at: string | null;
   created_at: string;
 };
 
@@ -51,6 +59,15 @@ type InventorySummary = {
   readyToSellCount: number;
   activatedCount: number;
 };
+
+type BadgeVariant =
+  | "neutral"
+  | "warm"
+  | "green"
+  | "success"
+  | "info"
+  | "danger"
+  | "muted";
 
 const INITIAL_SUMMARY: InventorySummary = {
   totalTags: 0,
@@ -71,10 +88,19 @@ const STATUS_SEARCH_MAP: Array<{
   terms: string[];
 }> = [
   { value: "available", terms: ["disponible", "available", "dispon", "stock"] },
-  { value: "reserved", terms: ["reservada", "reservado", "reserved", "reserva"] },
-  { value: "activated", terms: ["activada", "activado", "activated", "activa"] },
+  {
+    value: "reserved",
+    terms: ["reservada", "reservado", "reserved", "reserva"],
+  },
+  {
+    value: "activated",
+    terms: ["activada", "activado", "activated", "activa"],
+  },
   { value: "suspended", terms: ["suspendida", "suspendido", "suspended"] },
-  { value: "lost", terms: ["extraviada", "extraviado", "perdida", "perdido", "lost"] },
+  {
+    value: "lost",
+    terms: ["extraviada", "extraviado", "perdida", "perdido", "lost"],
+  },
   { value: "retired", terms: ["retirada", "retirado", "retired", "baja"] },
 ];
 
@@ -98,6 +124,9 @@ const EDITABLE_PLAN_OPTIONS: CustomSelectOption[] = [
   { value: "partner_batch", label: "Lote aliado" },
   { value: "other", label: "Otro" },
 ];
+
+const inputClass =
+  "w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 disabled:cursor-not-allowed disabled:opacity-60";
 
 function csvEscape(value: unknown) {
   const text = String(value ?? "");
@@ -154,9 +183,7 @@ function getStatusLabel(status: TagStatus) {
   }
 }
 
-function getStatusVariant(
-  status: TagStatus
-): "neutral" | "warm" | "green" | "success" | "info" | "danger" | "muted" {
+function getStatusVariant(status: TagStatus): BadgeVariant {
   switch (status) {
     case "available":
       return "green";
@@ -167,7 +194,6 @@ function getStatusVariant(
     case "lost":
       return "danger";
     case "suspended":
-      return "muted";
     case "retired":
       return "muted";
     default:
@@ -175,9 +201,7 @@ function getStatusVariant(
   }
 }
 
-function getPlanVariant(
-  plan: SoldPlanType | null | undefined
-): "neutral" | "warm" | "green" | "success" | "info" | "danger" | "muted" {
+function getPlanVariant(plan: SoldPlanType | null | undefined): BadgeVariant {
   switch (plan) {
     case "custom":
       return "warm";
@@ -190,6 +214,10 @@ function getPlanVariant(
     default:
       return "neutral";
   }
+}
+
+function getFabricationVariant(isFabricated: boolean): BadgeVariant {
+  return isFabricated ? "success" : "muted";
 }
 
 function chunkArray<T>(items: T[], size: number) {
@@ -212,8 +240,8 @@ function getPaginationItems(currentPage: number, totalPages: number) {
   pages.add(totalPages);
 
   for (
-    let page = Math.max(1, currentPage - 2);
-    page <= Math.min(totalPages, currentPage + 2);
+    let page = Math.max(1, currentPage - 1);
+    page <= Math.min(totalPages, currentPage + 1);
     page++
   ) {
     pages.add(page);
@@ -288,6 +316,14 @@ function buildTagPublicUrl(baseUrl: string, code: string, source?: ScanSource) {
   return `${root}?source=${source}`;
 }
 
+async function copyText(value: string) {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error("Tu navegador no permite copiar automáticamente.");
+  }
+
+  await navigator.clipboard.writeText(value);
+}
+
 export default function AdminTagsInventoryPage() {
   const { role, loading: authLoading } = useAuth();
 
@@ -313,6 +349,8 @@ export default function AdminTagsInventoryPage() {
   const [totalFiltered, setTotalFiltered] = useState(0);
   const [goToPageInput, setGoToPageInput] = useState("1");
 
+  const baseUrl = useMemo(() => window.location.origin, []);
+
   const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
 
   const paginationItems = useMemo(
@@ -326,6 +364,9 @@ export default function AdminTagsInventoryPage() {
     () => currentPageIds.filter((id) => selectedIds.includes(id)).length,
     [currentPageIds, selectedIds]
   );
+
+  const isCurrentPageSelected =
+    currentPageIds.length > 0 && selectedPageCount === currentPageIds.length;
 
   const startItem = totalFiltered === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalFiltered);
@@ -429,6 +470,7 @@ export default function AdminTagsInventoryPage() {
           sold_plan_type,
           is_fabricated,
           fabricated_at,
+          activated_at,
           created_at
         `,
           { count: "exact" }
@@ -559,6 +601,10 @@ export default function AdminTagsInventoryPage() {
     setCurrentPage(1);
   };
 
+  const applyQuickFilter = (filter: QuickFilter) => {
+    setQuickFilter(filter);
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
@@ -566,11 +612,7 @@ export default function AdminTagsInventoryPage() {
   };
 
   const toggleSelectCurrentPage = () => {
-    const allCurrentSelected =
-      currentPageIds.length > 0 &&
-      currentPageIds.every((id) => selectedIds.includes(id));
-
-    if (allCurrentSelected) {
+    if (isCurrentPageSelected) {
       setSelectedIds((prev) =>
         prev.filter((id) => !currentPageIds.includes(id))
       );
@@ -714,6 +756,7 @@ export default function AdminTagsInventoryPage() {
           sold_plan_type,
           is_fabricated,
           fabricated_at,
+          activated_at,
           created_at
         `)
         .in("id", idsChunk)
@@ -725,6 +768,40 @@ export default function AdminTagsInventoryPage() {
     }
 
     return collected.sort((a, b) => a.code.localeCompare(b.code, "es"));
+  };
+
+  const copyTagCode = async (code: string) => {
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      await copyText(code);
+      setSuccessMsg("Código copiado correctamente.");
+    } catch (error) {
+      setErrorMsg(
+        error instanceof Error ? error.message : "No se pudo copiar el código."
+      );
+    }
+  };
+
+  const copyTagUrl = async (code: string, source?: ScanSource) => {
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      await copyText(buildTagPublicUrl(baseUrl, code, source));
+      setSuccessMsg(
+        source === "qr"
+          ? "URL QR copiada correctamente."
+          : source === "nfc"
+            ? "URL NFC copiada correctamente."
+            : "URL pública copiada correctamente."
+      );
+    } catch (error) {
+      setErrorMsg(
+        error instanceof Error ? error.message : "No se pudo copiar la URL."
+      );
+    }
   };
 
   const exportCsv = async () => {
@@ -740,14 +817,13 @@ export default function AdminTagsInventoryPage() {
         return;
       }
 
-      const baseUrl = window.location.origin;
-
       const headers = [
         "Código",
         "Plan",
         "Estado",
         "Fabricada",
         "Fecha fabricación",
+        "Fecha activación",
         "Fecha de creación",
         "URL pública",
         "QR payload",
@@ -765,6 +841,7 @@ export default function AdminTagsInventoryPage() {
           getStatusLabel(tag.status),
           tag.is_fabricated ? "Sí" : "No",
           tag.fabricated_at || "",
+          tag.activated_at || "",
           tag.created_at || "",
           publicUrl,
           qrUrl,
@@ -792,7 +869,11 @@ export default function AdminTagsInventoryPage() {
       document.body.removeChild(anchor);
       URL.revokeObjectURL(url);
 
-      setSuccessMsg("CSV exportado correctamente.");
+      setSuccessMsg(
+        selectedIds.length > 0
+          ? "CSV exportado con las placas seleccionadas."
+          : "CSV exportado con la página actual."
+      );
     } catch (error) {
       console.error("AdminTagsInventoryPage export error:", error);
       setErrorMsg(
@@ -825,19 +906,19 @@ export default function AdminTagsInventoryPage() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
+          <div className="mokko-container relative z-10 py-7 md:py-14">
             <div className="mx-auto max-w-7xl">
               <AdminPageHeader
                 badge="Admin · Inventario de placas"
                 title="Inventario de placas"
-                description="Controla qué códigos ya están fabricados físicamente, cuáles aún no y ajusta el plan vendido solo en placas disponibles. Consulta el inventario por páginas, exporta lotes para producción y evita vender códigos que todavía no tienes en stock."
+                description="Controla códigos fabricados, stock disponible, activaciones, planes vendidos y exportación para producción."
                 actions={
-                  <>
+                  <div className="grid w-full gap-3 sm:flex sm:w-auto sm:flex-wrap">
                     <button
                       type="button"
                       onClick={() => void exportCsv()}
                       disabled={loading || actionLoading || !!planSavingId}
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     >
                       Exportar CSV
                     </button>
@@ -846,193 +927,224 @@ export default function AdminTagsInventoryPage() {
                       type="button"
                       onClick={() => void refreshAll()}
                       disabled={loading || actionLoading || !!planSavingId}
-                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                     >
                       {loading ? "Actualizando..." : "Recargar inventario"}
                     </button>
-                  </>
+                  </div>
                 }
               />
-            </div>
 
-            <AdminFlashMessages
-              success={successMsg}
-              error={errorMsg}
-              className="mx-auto mt-8 max-w-7xl"
-            />
+              <AdminFlashMessages
+                success={successMsg}
+                error={errorMsg}
+                className="mt-6"
+              />
 
-            {loading ? (
-              <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
-                Cargando inventario...
-              </div>
-            ) : (
-              <>
-                <div className="mx-auto mt-8 grid max-w-7xl gap-4 md:grid-cols-5">
-                  <StatCard
-                    label="Total códigos"
-                    value={summary.totalTags}
-                    variant="green"
-                    active={quickFilter === "all"}
-                    onClick={() => setQuickFilter("all")}
-                  />
-
-                  <StatCard
-                    label="Fabricadas"
-                    value={summary.fabricatedCount}
-                    variant="neutral"
-                    active={quickFilter === "fabricated"}
-                    onClick={() => setQuickFilter("fabricated")}
-                  />
-
-                  <StatCard
-                    label="No fabricadas"
-                    value={summary.notFabricatedCount}
-                    variant="yellow"
-                    active={quickFilter === "not_fabricated"}
-                    onClick={() => setQuickFilter("not_fabricated")}
-                  />
-
-                  <StatCard
-                    label="Listas para vender"
-                    value={summary.readyToSellCount}
-                    variant="green"
-                    active={quickFilter === "ready_to_sell"}
-                    onClick={() => setQuickFilter("ready_to_sell")}
-                  />
-
-                  <StatCard
-                    label="Activadas"
-                    value={summary.activatedCount}
-                    variant="neutral"
-                    active={quickFilter === "activated"}
-                    onClick={() => setQuickFilter("activated")}
-                  />
+              {loading ? (
+                <div className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
+                  Cargando inventario...
                 </div>
+              ) : (
+                <>
+                  <section className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+                    <StatCard
+                      label="Total"
+                      value={summary.totalTags}
+                      variant="green"
+                      active={quickFilter === "all"}
+                      onClick={() => applyQuickFilter("all")}
+                    />
 
-                <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                  <div className="grid gap-4 xl:grid-cols-[1.25fr_0.7fr_0.7fr_0.7fr_0.8fr]">
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Buscar código, estado o plan
-                      </label>
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Ej. 45R478, disponible o custom"
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50"
-                      />
-                    </div>
+                    <StatCard
+                      label="Fabricadas"
+                      value={summary.fabricatedCount}
+                      variant="neutral"
+                      active={quickFilter === "fabricated"}
+                      onClick={() => applyQuickFilter("fabricated")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Fabricación
-                      </label>
-                      <CustomSelect
-                        value={fabricationFilter}
-                        onChange={(value) =>
-                          setFabricationFilter(value as FabricationFilter)
-                        }
-                        options={fabricationOptions}
-                        placeholder="Todas"
-                      />
-                    </div>
+                    <StatCard
+                      label="No fabricadas"
+                      value={summary.notFabricatedCount}
+                      variant="yellow"
+                      active={quickFilter === "not_fabricated"}
+                      onClick={() => applyQuickFilter("not_fabricated")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Estado
-                      </label>
-                      <CustomSelect
-                        value={statusFilter}
-                        onChange={(value) => setStatusFilter(value as StatusFilter)}
-                        options={statusOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
+                    <StatCard
+                      label="Listas para vender"
+                      value={summary.readyToSellCount}
+                      variant="green"
+                      active={quickFilter === "ready_to_sell"}
+                      onClick={() => applyQuickFilter("ready_to_sell")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Plan
-                      </label>
-                      <CustomSelect
-                        value={planFilter}
-                        onChange={(value) => setPlanFilter(value as PlanFilter)}
-                        options={planOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
+                    <StatCard
+                      label="Activadas"
+                      value={summary.activatedCount}
+                      variant="neutral"
+                      active={quickFilter === "activated"}
+                      onClick={() => applyQuickFilter("activated")}
+                    />
+                  </section>
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Tamaño de página
-                      </label>
-                      <CustomSelect
-                        value={String(pageSize)}
-                        onChange={(value) => setPageSize(Number(value))}
-                        options={PAGE_SIZE_OPTIONS}
-                        placeholder="50 por página"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm text-white/50">
-                      Mostrando {startItem === 0 ? 0 : startItem} a {endItem} de{" "}
-                      {totalFiltered} placa{totalFiltered === 1 ? "" : "s"}.
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={clearFilters}
-                      className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                    >
-                      Limpiar filtros
-                    </button>
-                  </div>
-
-                  <div className="mt-4 border-t border-white/10 pt-4">
-                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="text-sm text-white/50">
-                        Seleccionadas: {selectedIds.length}
+                  <section className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <h2 className="text-2xl font-semibold">Filtros</h2>
+                        <p className="mt-2 text-sm leading-7 text-white/60">
+                          Busca por código, estado o plan. Puedes trabajar por
+                          página y seleccionar códigos para producción.
+                        </p>
                       </div>
 
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={toggleSelectCurrentPage}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                        >
-                          {currentPageIds.length > 0 &&
-                          selectedPageCount === currentPageIds.length
-                            ? "Quitar página"
-                            : "Seleccionar página"}
-                        </button>
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto"
+                      >
+                        Limpiar filtros
+                      </button>
+                    </div>
 
-                        <button
-                          type="button"
-                          onClick={() => void markSelectedAsFabricated()}
-                          disabled={actionLoading || selectedIds.length === 0 || !!planSavingId}
-                          className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Marcar seleccionadas como fabricadas
-                        </button>
+                    <div className="mt-5 grid gap-4 xl:grid-cols-[1.25fr_0.7fr_0.7fr_0.7fr_0.8fr]">
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Buscar código, estado o plan
+                        </label>
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Ej. 45R478, disponible o custom"
+                          className={inputClass}
+                        />
+                      </div>
 
-                        <button
-                          type="button"
-                          onClick={() => void markSelectedAsNotFabricated()}
-                          disabled={actionLoading || selectedIds.length === 0 || !!planSavingId}
-                          className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Marcar seleccionadas como no fabricadas
-                        </button>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Fabricación
+                        </label>
+                        <CustomSelect
+                          value={fabricationFilter}
+                          onChange={(value) =>
+                            setFabricationFilter(value as FabricationFilter)
+                          }
+                          options={fabricationOptions}
+                          placeholder="Todas"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Estado
+                        </label>
+                        <CustomSelect
+                          value={statusFilter}
+                          onChange={(value) =>
+                            setStatusFilter(value as StatusFilter)
+                          }
+                          options={statusOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Plan
+                        </label>
+                        <CustomSelect
+                          value={planFilter}
+                          onChange={(value) =>
+                            setPlanFilter(value as PlanFilter)
+                          }
+                          options={planOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Tamaño de página
+                        </label>
+                        <CustomSelect
+                          value={String(pageSize)}
+                          onChange={(value) => setPageSize(Number(value))}
+                          options={PAGE_SIZE_OPTIONS}
+                          placeholder="50 por página"
+                        />
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="mx-auto mt-8 max-w-7xl overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.04] shadow-2xl backdrop-blur-sm">
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-[#141410] px-4 py-3 text-sm text-white/60">
+                      Mostrando{" "}
+                      <span className="font-semibold text-white">
+                        {startItem === 0 ? 0 : startItem}
+                      </span>{" "}
+                      a{" "}
+                      <span className="font-semibold text-white">{endItem}</span>{" "}
+                      de{" "}
+                      <span className="font-semibold text-white">
+                        {totalFiltered}
+                      </span>{" "}
+                      placa{totalFiltered === 1 ? "" : "s"}. Seleccionadas:{" "}
+                      <span className="font-semibold text-white">
+                        {selectedIds.length}
+                      </span>
+                      .
+                    </div>
+
+                    <div className="mt-5 border-t border-white/10 pt-5">
+                      <div className="grid gap-3 xl:flex xl:items-center xl:justify-between">
+                        <div className="text-sm leading-7 text-white/55">
+                          Acciones masivas sobre placas seleccionadas.
+                        </div>
+
+                        <div className="grid gap-3 sm:flex sm:flex-wrap">
+                          <button
+                            type="button"
+                            onClick={toggleSelectCurrentPage}
+                            disabled={currentPageIds.length === 0}
+                            className="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                          >
+                            {isCurrentPageSelected
+                              ? "Quitar página"
+                              : "Seleccionar página"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => void markSelectedAsFabricated()}
+                            disabled={
+                              actionLoading ||
+                              selectedIds.length === 0 ||
+                              !!planSavingId
+                            }
+                            className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                          >
+                            Marcar fabricadas
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => void markSelectedAsNotFabricated()}
+                            disabled={
+                              actionLoading ||
+                              selectedIds.length === 0 ||
+                              !!planSavingId
+                            }
+                            className="w-full rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                          >
+                            Marcar no fabricadas
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
                   {tags.length === 0 ? (
-                    <div className="p-8">
+                    <section className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
                       <div className="text-2xl font-semibold">
                         No se encontraron placas
                       </div>
@@ -1040,221 +1152,385 @@ export default function AdminTagsInventoryPage() {
                         Ajusta la búsqueda o los filtros para ver otros
                         resultados.
                       </p>
-                    </div>
+                    </section>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full border-collapse">
-                        <thead>
-                          <tr className="border-b border-white/10 bg-[#141410] text-left text-xs uppercase tracking-[0.14em] text-white/45">
-                            <th className="px-4 py-4">
-                              <input
-                                type="checkbox"
-                                checked={
-                                  currentPageIds.length > 0 &&
-                                  selectedPageCount === currentPageIds.length
-                                }
-                                onChange={toggleSelectCurrentPage}
-                                className="h-4 w-4 accent-[#E8C547]"
-                              />
-                            </th>
-                            <th className="px-4 py-4">Código</th>
-                            <th className="px-4 py-4">Plan</th>
-                            <th className="px-4 py-4">Estado</th>
-                            <th className="px-4 py-4">Fabricación</th>
-                            <th className="px-4 py-4">Fecha fabricación</th>
-                          </tr>
-                        </thead>
+                    <>
+                      <section className="mt-8 grid gap-4 lg:hidden">
+                        {tags.map((tag) => (
+                          <TagMobileCard
+                            key={tag.id}
+                            tag={tag}
+                            baseUrl={baseUrl}
+                            selected={selectedIds.includes(tag.id)}
+                            disabled={actionLoading || !!planSavingId}
+                            planSavingId={planSavingId}
+                            onToggle={() => toggleSelect(tag.id)}
+                            onPlanChange={(nextValue) =>
+                              void updateTagPlan(tag, nextValue)
+                            }
+                            onCopyCode={() => void copyTagCode(tag.code)}
+                            onCopyUrl={(source) =>
+                              void copyTagUrl(tag.code, source)
+                            }
+                          />
+                        ))}
+                      </section>
 
-                        <tbody>
-                          {tags.map((tag) => {
-                            const editable = canEditTagPlan(tag);
-
-                            return (
-                              <tr
-                                key={tag.id}
-                                className="border-b border-white/6 text-sm text-white/82 transition hover:bg-white/[0.03]"
-                              >
-                                <td className="px-4 py-4">
+                      <section className="mt-8 hidden overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.04] shadow-2xl backdrop-blur-sm lg:block">
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full border-collapse">
+                            <thead>
+                              <tr className="border-b border-white/10 bg-[#141410] text-left text-xs uppercase tracking-[0.14em] text-white/45">
+                                <th className="px-4 py-4">
                                   <input
                                     type="checkbox"
-                                    checked={selectedIds.includes(tag.id)}
-                                    onChange={() => toggleSelect(tag.id)}
+                                    checked={isCurrentPageSelected}
+                                    onChange={toggleSelectCurrentPage}
                                     className="h-4 w-4 accent-[#E8C547]"
                                   />
-                                </td>
-
-                                <td className="px-4 py-4 font-semibold text-[#F5F0E8]">
-                                  {tag.code}
-                                </td>
-
-                                <td className="px-4 py-4">
-                                  {editable ? (
-                                    <div className="min-w-[220px]">
-                                      <CustomSelect
-                                        value={tag.sold_plan_type ?? ""}
-                                        onChange={(value) =>
-                                          void updateTagPlan(
-                                            tag,
-                                            value as RowPlanValue
-                                          )
-                                        }
-                                        options={EDITABLE_PLAN_OPTIONS}
-                                        placeholder="Selecciona plan"
-                                        disabled={
-                                          planSavingId === tag.id || actionLoading
-                                        }
-                                      />
-                                    </div>
-                                  ) : (
-                                    <Badge variant={getPlanVariant(tag.sold_plan_type)}>
-                                      {getPlanLabel(tag.sold_plan_type)}
-                                    </Badge>
-                                  )}
-                                </td>
-
-                                <td className="px-4 py-4">
-                                  <Badge variant={getStatusVariant(tag.status)}>
-                                    {getStatusLabel(tag.status)}
-                                  </Badge>
-                                </td>
-
-                                <td className="px-4 py-4">
-                                  <Badge variant={tag.is_fabricated ? "success" : "muted"}>
-                                    {tag.is_fabricated
-                                      ? "Fabricada"
-                                      : "No fabricada"}
-                                  </Badge>
-                                </td>
-
-                                <td className="px-4 py-4 text-white/70">
-                                  {formatDateTime(tag.fabricated_at)}
-                                </td>
+                                </th>
+                                <th className="px-4 py-4">Código</th>
+                                <th className="px-4 py-4">Plan</th>
+                                <th className="px-4 py-4">Estado</th>
+                                <th className="px-4 py-4">Fabricación</th>
+                                <th className="px-4 py-4">Fecha fabricación</th>
+                                <th className="px-4 py-4">Fecha activación</th>
+                                <th className="px-4 py-4">Creación</th>
+                                <th className="px-4 py-4">Acciones</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                            </thead>
+
+                            <tbody>
+                              {tags.map((tag) => {
+                                const editable = canEditTagPlan(tag);
+                                const publicUrl = buildTagPublicUrl(
+                                  baseUrl,
+                                  tag.code
+                                );
+
+                                return (
+                                  <tr
+                                    key={tag.id}
+                                    className="border-b border-white/6 text-sm text-white/82 transition hover:bg-white/[0.03]"
+                                  >
+                                    <td className="px-4 py-4">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedIds.includes(tag.id)}
+                                        onChange={() => toggleSelect(tag.id)}
+                                        className="h-4 w-4 accent-[#E8C547]"
+                                      />
+                                    </td>
+
+                                    <td className="px-4 py-4">
+                                      <div className="font-semibold text-[#F5F0E8]">
+                                        {tag.code}
+                                      </div>
+                                      <div className="mt-1 text-xs text-white/40">
+                                        ID: {tag.id.slice(0, 8)}...
+                                      </div>
+                                    </td>
+
+                                    <td className="px-4 py-4">
+                                      {editable ? (
+                                        <div className="min-w-[220px]">
+                                          <CustomSelect
+                                            value={tag.sold_plan_type ?? ""}
+                                            onChange={(value) =>
+                                              void updateTagPlan(
+                                                tag,
+                                                value as RowPlanValue
+                                              )
+                                            }
+                                            options={EDITABLE_PLAN_OPTIONS}
+                                            placeholder="Selecciona plan"
+                                            disabled={
+                                              planSavingId === tag.id ||
+                                              actionLoading
+                                            }
+                                          />
+                                        </div>
+                                      ) : (
+                                        <Badge
+                                          variant={getPlanVariant(
+                                            tag.sold_plan_type
+                                          )}
+                                        >
+                                          {getPlanLabel(tag.sold_plan_type)}
+                                        </Badge>
+                                      )}
+                                    </td>
+
+                                    <td className="px-4 py-4">
+                                      <Badge
+                                        variant={getStatusVariant(tag.status)}
+                                      >
+                                        {getStatusLabel(tag.status)}
+                                      </Badge>
+                                    </td>
+
+                                    <td className="px-4 py-4">
+                                      <Badge
+                                        variant={getFabricationVariant(
+                                          tag.is_fabricated
+                                        )}
+                                      >
+                                        {tag.is_fabricated
+                                          ? "Fabricada"
+                                          : "No fabricada"}
+                                      </Badge>
+                                    </td>
+
+                                    <td className="px-4 py-4 text-white/70">
+                                      {formatDateTime(tag.fabricated_at)}
+                                    </td>
+
+                                    <td className="px-4 py-4 text-white/70">
+                                      {formatDateTime(tag.activated_at)}
+                                    </td>
+
+                                    <td className="px-4 py-4 text-white/70">
+                                      {formatDateTime(tag.created_at)}
+                                    </td>
+
+                                    <td className="px-4 py-4">
+                                      <div className="grid min-w-[180px] gap-2">
+                                        <a
+                                          href={publicUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex items-center justify-center rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-3 py-2 text-xs font-semibold text-[#F5F0E8] transition hover:bg-[#E8C547]/15"
+                                        >
+                                          Abrir perfil
+                                        </a>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            void copyTagCode(tag.code)
+                                          }
+                                          className="inline-flex items-center justify-center rounded-2xl border border-white/10 px-3 py-2 text-xs font-medium text-white/85 transition hover:bg-white/5"
+                                        >
+                                          Copiar código
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+                    </>
                   )}
-                </div>
 
-                <div className="mx-auto mt-6 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="text-sm text-white/55">
-                      Página {totalFiltered === 0 ? 0 : currentPage} de{" "}
-                      {totalFiltered === 0 ? 0 : totalPages}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage(1)}
-                        disabled={currentPage <= 1}
-                        className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Primera
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCurrentPage((prev) => Math.max(1, prev - 1))
-                        }
-                        disabled={currentPage <= 1}
-                        className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Anterior
-                      </button>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        {paginationItems.map((item, index) =>
-                          item === "ellipsis" ? (
-                            <span
-                              key={`ellipsis-${index}`}
-                              className="px-2 text-sm text-white/45"
-                            >
-                              ...
-                            </span>
-                          ) : (
-                            <button
-                              key={`page-${item}`}
-                              type="button"
-                              onClick={() => setCurrentPage(item)}
-                              className={`min-w-[44px] rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                                item === currentPage
-                                  ? "bg-[#E8C547] text-[#1A1A14] shadow-lg shadow-[#E8C547]/20"
-                                  : "border border-white/10 text-white/85 hover:bg-white/5"
-                              }`}
-                            >
-                              {item}
-                            </button>
-                          )
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                        }
-                        disabled={currentPage >= totalPages}
-                        className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Siguiente
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage(totalPages)}
-                        disabled={currentPage >= totalPages}
-                        className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Última
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center">
-                    <div className="text-sm text-white/60">Ir a página</div>
-
-                    <input
-                      type="number"
-                      min={1}
-                      max={Math.max(1, totalPages)}
-                      value={goToPageInput}
-                      onChange={(e) => setGoToPageInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          goToPage();
-                        }
-                      }}
-                      className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 sm:w-32"
+                  {totalFiltered > 0 && (
+                    <PaginationPanel
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      goToPageInput={goToPageInput}
+                      paginationItems={paginationItems}
+                      setCurrentPage={setCurrentPage}
+                      setGoToPageInput={setGoToPageInput}
+                      goToPage={goToPage}
+                      totalFiltered={totalFiltered}
                     />
+                  )}
 
-                    <button
-                      type="button"
-                      onClick={goToPage}
-                      className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                    >
-                      Ir
-                    </button>
+                  <div className="mt-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-4 text-sm leading-7 text-[#f6df8a]">
+                    Consejo operativo: para vender sin errores, prioriza códigos
+                    con <strong className="text-white">estado Disponible</strong>,{" "}
+                    <strong className="text-white">Fabricada</strong> y ajusta
+                    el plan antes de activarlas.
                   </div>
-                </div>
-
-                <div className="mx-auto mt-6 max-w-7xl rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-4 text-sm leading-7 text-[#f6df8a]">
-                  Consejo operativo: para vender sin errores, prioriza códigos con{" "}
-                  <strong className="text-white">estado Disponible</strong>,{" "}
-                  <strong className="text-white">Fabricada</strong> y ajusta el
-                  plan solo antes de activarlas.
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </section>
       </main>
 
       <Footer />
     </>
+  );
+}
+
+function TagMobileCard({
+  tag,
+  selected,
+  disabled,
+  baseUrl,
+  planSavingId,
+  onToggle,
+  onPlanChange,
+  onCopyCode,
+  onCopyUrl,
+}: {
+  tag: TagRow;
+  selected: boolean;
+  disabled: boolean;
+  baseUrl: string;
+  planSavingId: string | null;
+  onToggle: () => void;
+  onPlanChange: (nextValue: RowPlanValue) => void;
+  onCopyCode: () => void;
+  onCopyUrl: (source?: ScanSource) => void;
+}) {
+  const editable = canEditTagPlan(tag);
+  const publicUrl = buildTagPublicUrl(baseUrl, tag.code);
+  const qrUrl = buildTagPublicUrl(baseUrl, tag.code, "qr");
+  const nfcUrl = buildTagPublicUrl(baseUrl, tag.code, "nfc");
+
+  return (
+    <article className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
+      <div className="flex items-start justify-between gap-4">
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggle}
+            disabled={disabled}
+            className="h-4 w-4 accent-[#E8C547] disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          <span className="text-sm text-white/65">Seleccionar</span>
+        </label>
+
+        <Badge variant={getStatusVariant(tag.status)}>
+          {getStatusLabel(tag.status)}
+        </Badge>
+      </div>
+
+      <div className="mt-5">
+        <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+          Código
+        </div>
+        <div className="mt-2 break-all text-3xl font-semibold text-[#F5F0E8]">
+          {tag.code}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        <InfoMini label="Estado" value={getStatusLabel(tag.status)} />
+        <InfoMini
+          label="Fabricación"
+          value={tag.is_fabricated ? "Fabricada" : "No fabricada"}
+        />
+        <InfoMini
+          label="Fecha fabricación"
+          value={formatDateTime(tag.fabricated_at)}
+        />
+        <InfoMini
+          label="Fecha activación"
+          value={formatDateTime(tag.activated_at)}
+        />
+        <InfoMini label="Fecha creación" value={formatDateTime(tag.created_at)} />
+      </div>
+
+      <div className="mt-5">
+        <div className="mb-2 text-sm text-white/80">Plan vendido</div>
+
+        {editable ? (
+          <CustomSelect
+            value={tag.sold_plan_type ?? ""}
+            onChange={(value) => onPlanChange(value as RowPlanValue)}
+            options={EDITABLE_PLAN_OPTIONS}
+            placeholder="Selecciona plan"
+            disabled={planSavingId === tag.id || disabled}
+          />
+        ) : (
+          <Badge variant={getPlanVariant(tag.sold_plan_type)}>
+            {getPlanLabel(tag.sold_plan_type)}
+          </Badge>
+        )}
+
+        {!editable && (
+          <p className="mt-2 text-xs leading-5 text-white/42">
+            El plan solo se edita mientras la placa está disponible.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 grid gap-2">
+        <a
+          href={publicUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex w-full items-center justify-center rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm font-semibold text-[#F5F0E8] transition hover:bg-[#E8C547]/15"
+        >
+          Abrir perfil público
+        </a>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={onCopyCode}
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Copiar código
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onCopyUrl()}
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Copiar URL
+          </button>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <a
+            href={qrUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Probar QR
+          </a>
+
+          <a
+            href={nfcUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Probar NFC
+          </a>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => onCopyUrl("qr")}
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Copiar QR
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onCopyUrl("nfc")}
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Copiar NFC
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function InfoMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#141410] px-4 py-3">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/42">
+        {label}
+      </div>
+      <div className="mt-1 break-words text-sm font-medium text-white/82">
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -1277,37 +1553,150 @@ function StatCard({
         ? "border-[#2D5A27]/70 bg-[#12311c]"
         : "border-[#2D5A27]/60 bg-[#12311c]"
       : variant === "yellow"
-      ? active
-        ? "border-[#E8C547]/25 bg-[#E8C547]/10"
-        : "border-[#E8C547]/15 bg-[#E8C547]/8"
-      : active
-      ? "border-[#E8C547]/20 bg-[#E8C547]/8"
-      : "border-white/8 bg-white/[0.04]";
-
-  const content = (
-    <>
-      <div className="text-sm uppercase tracking-[0.14em] text-white/45">
-        {label}
-      </div>
-      <div className="mt-3 text-4xl font-semibold text-[#E8C547]">{value}</div>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={`rounded-[28px] border p-6 text-left transition hover:-translate-y-[1px] ${variantClass}`}
-      >
-        {content}
-      </button>
-    );
-  }
+        ? active
+          ? "border-[#E8C547]/25 bg-[#E8C547]/10"
+          : "border-[#E8C547]/15 bg-[#E8C547]/8"
+        : active
+          ? "border-[#E8C547]/20 bg-[#E8C547]/8"
+          : "border-white/8 bg-white/[0.04]";
 
   return (
-    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
-      {content}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[24px] border p-4 text-left transition hover:-translate-y-[1px] sm:rounded-[28px] sm:p-6 ${variantClass}`}
+    >
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45 sm:text-sm">
+        {label}
+      </div>
+      <div className="mt-3 text-3xl font-semibold text-[#E8C547] sm:text-4xl">
+        {value}
+      </div>
+    </button>
+  );
+}
+
+function PaginationPanel({
+  currentPage,
+  totalPages,
+  goToPageInput,
+  paginationItems,
+  setCurrentPage,
+  setGoToPageInput,
+  goToPage,
+  totalFiltered,
+}: {
+  currentPage: number;
+  totalPages: number;
+  goToPageInput: string;
+  paginationItems: Array<number | "ellipsis">;
+  setCurrentPage: Dispatch<SetStateAction<number>>;
+  setGoToPageInput: Dispatch<SetStateAction<string>>;
+  goToPage: () => void;
+  totalFiltered: number;
+}) {
+  return (
+    <section className="mt-6 rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="text-sm text-white/55">
+          Página {totalFiltered === 0 ? 0 : currentPage} de{" "}
+          {totalFiltered === 0 ? 0 : totalPages}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage <= 1}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Primera
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage <= 1}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Anterior
+          </button>
+
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">
+            {paginationItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="px-2 text-sm text-white/45"
+                >
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={`page-${item}`}
+                  type="button"
+                  onClick={() => setCurrentPage(item)}
+                  className={`min-w-[44px] rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                    item === currentPage
+                      ? "bg-[#E8C547] text-[#1A1A14] shadow-lg shadow-[#E8C547]/20"
+                      : "border border-white/10 text-white/85 hover:bg-white/5"
+                  }`}
+                >
+                  {item}
+                </button>
+              )
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+            }
+            disabled={currentPage >= totalPages}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage >= totalPages}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Última
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="grid gap-3 sm:flex sm:items-center">
+          <label className="text-sm text-white/60">Ir a página</label>
+
+          <input
+            type="number"
+            min={1}
+            max={Math.max(1, totalPages)}
+            value={goToPageInput}
+            onChange={(e) => setGoToPageInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                goToPage();
+              }
+            }}
+            className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 sm:w-32"
+          />
+
+          <button
+            type="button"
+            onClick={goToPage}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Ir
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }

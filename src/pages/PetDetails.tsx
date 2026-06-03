@@ -4,7 +4,9 @@ import {
   AlertTriangle,
   ChevronLeft,
   Eye,
+  HeartPulse,
   Link2,
+  MapPinned,
   Shield,
   Tags,
 } from "lucide-react";
@@ -89,7 +91,7 @@ function etiquetaSexo(sex: string | null | undefined): string {
 function etiquetaPlan(plan: PlanVendido | null | undefined): string {
   if (plan === "essential") return "Essential";
   if (plan === "custom") return "Custom";
-  if (plan === "partner_batch") return "Partner batch";
+  if (plan === "partner_batch") return "Lote aliado";
   if (plan === "other") return "Otro";
   return "No definido";
 }
@@ -97,10 +99,33 @@ function etiquetaPlan(plan: PlanVendido | null | undefined): string {
 function etiquetaVisibilidad(
   visibilidad: EstadoVisibilidad | null | undefined
 ): string {
-  if (visibilidad === "public") return "Público";
-  if (visibilidad === "private") return "Privado";
-  if (visibilidad === "lost_mode") return "Perdido";
+  if (visibilidad === "public") return "Perfil público";
+  if (visibilidad === "private") return "Perfil privado";
+  if (visibilidad === "lost_mode") return "Modo perdido";
   return "Sin configurar";
+}
+
+function getVisibilityClass(visibilidad: EstadoVisibilidad | null | undefined) {
+  if (visibilidad === "lost_mode") {
+    return "border-orange-400/20 bg-orange-400/10 text-orange-200";
+  }
+
+  if (visibilidad === "private") {
+    return "border-white/10 bg-white/5 text-white/65";
+  }
+
+  return "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200";
+}
+
+function etiquetaEstadoReporte(status: string | null | undefined) {
+  const value = (status ?? "").trim().toLowerCase();
+
+  if (value === "new") return "Nuevo";
+  if (value === "viewed") return "Visto";
+  if (value === "resolved") return "Resuelto";
+  if (value === "closed") return "Cerrado";
+
+  return status || "Registrado";
 }
 
 function formatearFecha(valor: string | null | undefined): string {
@@ -234,7 +259,9 @@ export default function PetDetails() {
         if (perfilRes.error) {
           console.error("PetDetails pet_profiles error:", perfilRes.error);
           setPerfil(null);
-          advertencias.push("No se pudo cargar la configuración pública de la mascota.");
+          advertencias.push(
+            "No se pudo cargar la configuración pública de la mascota."
+          );
         } else {
           setPerfil((perfilRes.data as PerfilMascota | null) ?? null);
         }
@@ -242,7 +269,9 @@ export default function PetDetails() {
         if (reportesRes.error) {
           console.error("PetDetails found_reports error:", reportesRes.error);
           setReportes([]);
-          advertencias.push("No se pudieron cargar todos los reportes de la mascota.");
+          advertencias.push(
+            "No se pudieron cargar todos los reportes de la mascota."
+          );
         } else {
           setReportes((reportesRes.data ?? []) as ReporteMascota[]);
         }
@@ -250,6 +279,7 @@ export default function PetDetails() {
         setMensajeAdvertencia(advertencias.join(" "));
       } catch (error) {
         console.error("PetDetails load error:", error);
+
         setMensajeError(
           error instanceof Error
             ? error.message
@@ -283,13 +313,17 @@ export default function PetDetails() {
     return etiquetaSexo(mascota?.sex);
   }, [mascota?.sex]);
 
+  const placasActivas = useMemo(() => {
+    return placas.filter((placa) => placa.status === "active");
+  }, [placas]);
+
   const placaActivaPrincipal = useMemo(() => {
     return (
-      placas.find((placa) => placa.status === "active" && placa.is_primary) ||
-      placas.find((placa) => placa.status === "active") ||
+      placasActivas.find((placa) => placa.is_primary) ||
+      placasActivas[0] ||
       null
     );
-  }, [placas]);
+  }, [placasActivas]);
 
   const codigoPublico = useMemo(() => {
     const tag = primeraRelacion(placaActivaPrincipal?.tags);
@@ -301,8 +335,9 @@ export default function PetDetails() {
     return `${window.location.origin}/p/${codigoPublico}`;
   }, [codigoPublico]);
 
-  const totalPlacasActivas = placas.filter((placa) => placa.status === "active").length;
+  const totalPlacasActivas = placasActivas.length;
   const totalReportes = reportes.length;
+  const perfilMedicoHabilitado = !!perfil?.medical_profile_enabled;
 
   if (cargando || authLoading) {
     return (
@@ -327,7 +362,9 @@ export default function PetDetails() {
         <main className="min-h-screen bg-[#1A1A14] text-white">
           <section className="mokko-container py-12">
             <div className="mx-auto max-w-5xl rounded-[32px] border border-red-400/20 bg-red-400/10 px-6 py-12">
-              <div className="text-2xl font-semibold">No se pudo cargar la mascota</div>
+              <div className="text-2xl font-semibold">
+                No se pudo cargar la mascota
+              </div>
               <p className="mt-3 text-sm leading-7 text-red-200">
                 {mensajeError || "No se encontró información para esta mascota."}
               </p>
@@ -357,139 +394,286 @@ export default function PetDetails() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
-            <div className="mx-auto max-w-5xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Detalle de mascota
-              </span>
+          <div className="mokko-container relative z-10 py-7 md:py-14">
+            <div className="mx-auto max-w-6xl">
+              <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[36px] md:p-8">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-5">
+                    <span className="mokko-badge mokko-badge-primary w-fit">
+                      Detalle de mascota
+                    </span>
 
-              <div className="mt-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    {mascota.name}
-                  </h1>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                        {mascota.photo_url ? (
+                          <img
+                            src={mascota.photo_url}
+                            alt={mascota.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-white/35">
+                            Sin foto
+                          </div>
+                        )}
+                      </div>
 
-                  <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Revisa y administra la información de tu mascota.
-                  </p>
-                </div>
+                      <div>
+                        <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                          {mascota.name}
+                        </h1>
 
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => navigate("/mis-mascotas")}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/[0.08]"
-                  >
-                    <ChevronLeft className="h-4.5 w-4.5" />
-                    Volver
-                  </button>
+                        <p className="mt-2 text-sm leading-7 text-white/70 sm:text-base">
+                          {etiquetaEspecie(mascota.species)} • {razaTexto}
+                        </p>
 
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/mis-mascotas/${petId}/perfil-publico`)}
-                    className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
-                  >
-                    Gestionar perfil público
-                  </button>
-                </div>
-              </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <StatusPill
+                            className={getVisibilityClass(
+                              perfil?.visibility_status
+                            )}
+                          >
+                            {etiquetaVisibilidad(perfil?.visibility_status)}
+                          </StatusPill>
 
-              {mensajeAdvertencia && (
-                <div className="mt-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                  {mensajeAdvertencia}
-                </div>
-              )}
+                          {totalPlacasActivas === 0 ? (
+                            <StatusPill className="border-red-400/20 bg-red-400/10 text-red-200">
+                              Sin placa activa
+                            </StatusPill>
+                          ) : (
+                            <StatusPill className="border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200">
+                              {totalPlacasActivas} placa
+                              {totalPlacasActivas === 1 ? "" : "s"}
+                            </StatusPill>
+                          )}
 
-              <div className="mt-8 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-                <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
-                  <div className="flex items-center gap-4">
-                    <div className="h-20 w-20 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-                      {mascota.photo_url ? (
-                        <img
-                          src={mascota.photo_url}
-                          alt={mascota.name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-white/35">
-                          Sin foto
+                          {perfilMedicoHabilitado && (
+                            <StatusPill className="border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]">
+                              Ficha médica
+                            </StatusPill>
+                          )}
                         </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="text-3xl font-semibold">{mascota.name}</div>
-                      <div className="mt-1 text-sm text-white/60">
-                        {etiquetaEspecie(mascota.species)} • {razaTexto}
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-8">
-                    <h2 className="text-2xl font-semibold">Información general</h2>
+                  <div className="grid gap-3 sm:flex sm:flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/mis-mascotas")}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/[0.08] sm:w-auto sm:py-3.5"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Volver
+                    </button>
 
-                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                      <InfoCard label="Especie" value={etiquetaEspecie(mascota.species)} />
-                      <InfoCard label="Raza" value={razaTexto} />
-                      <InfoCard label="Sexo" value={sexoTexto} />
-                      <InfoCard label="Color" value={mascota.color || "No especificado"} />
-                      <InfoCard
-                        label="Fecha de nacimiento"
-                        value={formatearFecha(mascota.birthdate)}
-                      />
-                      <InfoCard
-                        label="Peso"
-                        value={
-                          mascota.weight_kg != null
-                            ? `${mascota.weight_kg} kg`
-                            : "No especificado"
-                        }
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(`/mis-mascotas/${petId}/perfil-publico`)
+                      }
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
+                    >
+                      Gestionar perfil público
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {mensajeAdvertencia && (
+                <div className="mt-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm leading-6 text-[#f6df8a]">
+                  {mensajeAdvertencia}
+                </div>
+              )}
+
+              <section className="mt-7 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+                <MetricCard
+                  icon={Tags}
+                  label="Placas"
+                  value={totalPlacasActivas}
+                  description="Activas."
+                />
+
+                <MetricCard
+                  icon={MapPinned}
+                  label="Reportes"
+                  value={totalReportes}
+                  description="Registrados."
+                  highlight={totalReportes > 0}
+                />
+
+                <MetricCard
+                  icon={Eye}
+                  label="Perfil"
+                  value={etiquetaVisibilidad(perfil?.visibility_status)}
+                  description="Visibilidad."
+                />
+
+                <MetricCard
+                  icon={HeartPulse}
+                  label="Ficha médica"
+                  value={perfilMedicoHabilitado ? "Sí" : "No"}
+                  description="Según plan."
+                  highlight={perfilMedicoHabilitado}
+                />
+              </section>
+
+              <div className="mt-7 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+                <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px]">
+                  <div className="space-y-2">
+                    <h2 className="text-2xl font-semibold">
+                      Información general
+                    </h2>
+                    <p className="text-sm leading-7 text-white/65">
+                      Datos principales registrados para esta mascota.
+                    </p>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                    <InfoCard
+                      label="Especie"
+                      value={etiquetaEspecie(mascota.species)}
+                    />
+                    <InfoCard label="Raza" value={razaTexto} />
+                    <InfoCard label="Sexo" value={sexoTexto} />
+                    <InfoCard
+                      label="Color"
+                      value={mascota.color || "No especificado"}
+                    />
+                    <InfoCard
+                      label="Fecha de nacimiento"
+                      value={formatearFecha(mascota.birthdate)}
+                    />
+                    <InfoCard
+                      label="Peso"
+                      value={
+                        mascota.weight_kg != null
+                          ? `${mascota.weight_kg} kg`
+                          : "No especificado"
+                      }
+                    />
+                  </div>
+
+                  <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/mis-mascotas")}
+                      className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
+                    >
+                      Editar desde listado
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(`/mis-mascotas/${petId}/perfil-publico`)
+                      }
+                      className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
+                    >
+                      Configurar perfil público
+                    </button>
                   </div>
                 </section>
 
-                <div className="grid gap-6">
-                  <section className="rounded-[32px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
-                    <h2 className="text-2xl font-semibold">Resumen rápido</h2>
-
-                    <div className="mt-5 grid gap-3">
-                      <ResumenItem label="Placas activas" value={String(totalPlacasActivas)} />
-                      <ResumenItem label="Reportes" value={String(totalReportes)} />
-                      <ResumenItem
-                        label="Perfil público"
-                        value={etiquetaVisibilidad(perfil?.visibility_status)}
-                      />
-                      <ResumenItem
-                        label="Perfil médico"
-                        value={
-                          perfil?.medical_profile_enabled ? "Desbloqueado" : "No desbloqueado"
-                        }
-                      />
+                <div className="grid content-start gap-6">
+                  <section className="rounded-[28px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-5 shadow-2xl sm:p-6 md:rounded-[32px]">
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-semibold">
+                        Accesos rápidos
+                      </h2>
+                      <p className="text-sm leading-7 text-white/65">
+                        Gestiona lo más importante de esta mascota.
+                      </p>
                     </div>
 
-                    {urlPublica && (
-                      <a
-                        href={urlPublica}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-[#E8C547]/20 bg-white/5 px-4 py-3 text-sm font-medium text-white/90 transition hover:bg-white/10"
+                    <div className="mt-6 grid gap-3">
+                      {urlPublica ? (
+                        <a
+                          href={urlPublica}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left transition hover:bg-white/10"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-base font-semibold">
+                                Ver perfil público
+                              </div>
+                              <div className="mt-1 text-sm text-white/65">
+                                Abrir enlace público de la placa.
+                              </div>
+                            </div>
+                            <Link2 className="h-4 w-4 text-white/40 transition group-hover:text-white/70" />
+                          </div>
+                        </a>
+                      ) : (
+                        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                          <div className="text-base font-semibold">
+                            Sin enlace público activo
+                          </div>
+                          <div className="mt-1 text-sm leading-7 text-white/65">
+                            Activa una placa para generar el perfil público.
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(`/mis-mascotas/${petId}/perfil-publico`)
+                        }
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left transition hover:bg-white/10"
                       >
-                        <Link2 className="h-4.5 w-4.5" />
-                        Ver perfil público
-                      </a>
-                    )}
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-base font-semibold">
+                              Ajustar perfil público
+                            </div>
+                            <div className="mt-1 text-sm text-white/65">
+                              Visibilidad, modo perdido y contacto.
+                            </div>
+                          </div>
+                          <Eye className="h-4 w-4 text-white/40" />
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          perfilMedicoHabilitado &&
+                          navigate(`/mis-mascotas/${petId}/perfil-medico`)
+                        }
+                        disabled={!perfilMedicoHabilitado}
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-base font-semibold">
+                              Ficha médica
+                            </div>
+                            <div className="mt-1 text-sm text-white/65">
+                              {perfilMedicoHabilitado
+                                ? "Datos médicos y vacunas."
+                                : "Disponible con funciones Custom."}
+                            </div>
+                          </div>
+                          <HeartPulse className="h-4 w-4 text-white/40" />
+                        </div>
+                      </button>
+                    </div>
                   </section>
 
-                  <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl sm:p-6 md:rounded-[32px]">
                     <div className="flex items-center gap-3">
                       <Tags className="h-5 w-5 text-[#E8C547]" />
-                      <h2 className="text-2xl font-semibold">Placas vinculadas</h2>
+                      <h2 className="text-2xl font-semibold">
+                        Placas vinculadas
+                      </h2>
                     </div>
 
                     <div className="mt-5 grid gap-3">
                       {placas.length === 0 ? (
-                        <div className="rounded-[24px] border border-white/10 bg-[#141410] p-4 text-sm text-white/65">
+                        <div className="rounded-[24px] border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/65">
                           Esta mascota aún no tiene placas vinculadas.
                         </div>
                       ) : (
@@ -513,20 +697,22 @@ export default function PetDetails() {
 
                                 <div className="flex flex-wrap gap-2">
                                   {placa.is_primary && (
-                                    <span className="rounded-full bg-[#E8C547]/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#f6df8a]">
+                                    <StatusPill className="border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]">
                                       Principal
-                                    </span>
+                                    </StatusPill>
                                   )}
 
-                                  <span
-                                    className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${
+                                  <StatusPill
+                                    className={
                                       placa.status === "active"
-                                        ? "bg-[#2D5A27]/18 text-[#9fd598]"
-                                        : "bg-white/8 text-white/65"
-                                    }`}
+                                        ? "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200"
+                                        : "border-white/10 bg-white/5 text-white/65"
+                                    }
                                   >
-                                    {placa.status === "active" ? "Activa" : placa.status}
-                                  </span>
+                                    {placa.status === "active"
+                                      ? "Activa"
+                                      : placa.status}
+                                  </StatusPill>
                                 </div>
                               </div>
 
@@ -540,64 +726,96 @@ export default function PetDetails() {
                     </div>
                   </section>
 
-                  <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl sm:p-6 md:rounded-[32px]">
                     <div className="flex items-center gap-3">
                       {perfil?.visibility_status === "private" ? (
                         <Shield className="h-5 w-5 text-white/80" />
                       ) : (
-                        <Eye className="h-5 w-5 text-[#9fd598]" />
+                        <Eye className="h-5 w-5 text-green-200" />
                       )}
 
-                      <h2 className="text-2xl font-semibold">Perfil público</h2>
+                      <h2 className="text-2xl font-semibold">
+                        Perfil público
+                      </h2>
                     </div>
 
-                    <div className="mt-5 rounded-[24px] border border-white/10 bg-[#141410] p-4">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        Estado actual
-                      </div>
-                      <div className="mt-2 text-base font-semibold">
-                        {etiquetaVisibilidad(perfil?.visibility_status)}
-                      </div>
-                    </div>
+                    <div className="mt-5 grid gap-3">
+                      <InfoCard
+                        label="Estado actual"
+                        value={etiquetaVisibilidad(perfil?.visibility_status)}
+                      />
 
-                    <div className="mt-3 rounded-[24px] border border-white/10 bg-[#141410] p-4">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        Reportes públicos
-                      </div>
-                      <div className="mt-2 text-base font-semibold">
-                        {perfil?.allow_found_reports ? "Permitidos" : "Desactivados"}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/mis-mascotas/${petId}/perfil-publico`)}
-                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                      >
-                        Ajustar perfil público
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/mis-mascotas/${petId}/perfil-medico`)}
-                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                      >
-                        Perfil médico
-                      </button>
+                      <InfoCard
+                        label="Reportes públicos"
+                        value={
+                          perfil?.allow_found_reports
+                            ? "Permitidos"
+                            : "Desactivados"
+                        }
+                      />
                     </div>
                   </section>
 
-                  {mensajeAdvertencia && (
-                    <section className="rounded-[28px] border border-[#E8C547]/20 bg-[#E8C547]/10 p-4 text-sm text-[#f6df8a]">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="mt-0.5 h-4.5 w-4.5 flex-none" />
-                        <div>{mensajeAdvertencia}</div>
-                      </div>
-                    </section>
-                  )}
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl sm:p-6 md:rounded-[32px]">
+                    <div className="flex items-center gap-3">
+                      <MapPinned className="h-5 w-5 text-[#E8C547]" />
+                      <h2 className="text-2xl font-semibold">
+                        Reportes recientes
+                      </h2>
+                    </div>
+
+                    <div className="mt-5 grid gap-3">
+                      {reportes.length === 0 ? (
+                        <div className="rounded-[24px] border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/65">
+                          Aún no hay reportes para esta mascota.
+                        </div>
+                      ) : (
+                        reportes.slice(0, 3).map((reporte) => (
+                          <button
+                            key={reporte.id}
+                            type="button"
+                            onClick={() =>
+                              navigate(`/mis-reportes/${reporte.id}`)
+                            }
+                            className="rounded-[24px] border border-white/10 bg-[#141410] p-4 text-left transition hover:bg-white/[0.06]"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-base font-semibold">
+                                  {etiquetaEstadoReporte(reporte.status)}
+                                </div>
+                                <div className="mt-1 text-sm text-white/55">
+                                  {formatearFecha(reporte.created_at)}
+                                </div>
+                              </div>
+                              <MapPinned className="h-4 w-4 text-white/35" />
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    {reportes.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => navigate("/mis-reportes")}
+                        className="mt-4 w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:py-3.5"
+                      >
+                        Ver todos los reportes
+                      </button>
+                    )}
+                  </section>
                 </div>
               </div>
+
+              {mensajeAdvertencia && (
+                <section className="mt-6 rounded-[28px] border border-[#E8C547]/20 bg-[#E8C547]/10 p-4 text-sm leading-6 text-[#f6df8a]">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+                    <div>{mensajeAdvertencia}</div>
+                  </div>
+                </section>
+              )}
             </div>
           </div>
         </section>
@@ -605,6 +823,54 @@ export default function PetDetails() {
 
       <Footer />
     </>
+  );
+}
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  description,
+  highlight = false,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | number;
+  description: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[22px] border p-4 sm:rounded-[28px] sm:p-5 ${
+        highlight
+          ? "border-[#E8C547]/20 bg-[#E8C547]/10"
+          : "border-white/10 bg-white/[0.045]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-[11px]">
+          {label}
+        </div>
+
+        <div
+          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
+            highlight
+              ? "bg-[#E8C547]/14 text-[#E8C547]"
+              : "bg-white/8 text-white/60"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+
+      <div className="mt-4 text-2xl font-semibold text-[#F5F0E8] sm:text-3xl">
+        {value}
+      </div>
+
+      <p className="mt-2 hidden text-sm leading-7 text-white/62 sm:block">
+        {description}
+      </p>
+    </div>
   );
 }
 
@@ -616,7 +882,7 @@ function InfoCard({
   value: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-[#141410] p-4">
+    <div className="rounded-[22px] border border-white/10 bg-[#141410] p-4 sm:rounded-[24px]">
       <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
@@ -625,19 +891,18 @@ function InfoCard({
   );
 }
 
-function ResumenItem({
-  label,
-  value,
+function StatusPill({
+  children,
+  className,
 }: {
-  label: string;
-  value: string;
+  children: React.ReactNode;
+  className: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
-      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-        {label}
-      </div>
-      <div className="mt-2 text-base font-semibold text-white">{value}</div>
-    </div>
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] ${className}`}
+    >
+      {children}
+    </span>
   );
 }

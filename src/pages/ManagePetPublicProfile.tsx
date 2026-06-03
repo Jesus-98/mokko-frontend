@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -54,8 +54,8 @@ type PerfilMascota = {
 };
 
 type PetTagActivo = {
-  sold_plan_type: PlanVendido;
   tag_id: string;
+  sold_plan_type: PlanVendido;
 };
 
 type TagResumen = {
@@ -69,10 +69,8 @@ function primeraRelacion<T>(valor: Relacion<T>): T | null {
 
 function perfilPorDefecto(
   petId: string,
-  planDetectado: PlanVendido | null
+  medicalProfileEnabled: boolean
 ): PerfilMascota {
-  const esCustom = planDetectado === "custom";
-
   return {
     pet_id: petId,
     visibility_status: "public",
@@ -81,8 +79,8 @@ function perfilPorDefecto(
     show_phone: true,
     show_whatsapp: true,
     show_address: false,
-    show_medical_alerts: esCustom,
-    medical_profile_enabled: esCustom,
+    show_medical_alerts: medicalProfileEnabled,
+    medical_profile_enabled: medicalProfileEnabled,
     lost_mode_message: "",
     address_text: "",
     emergency_message: "",
@@ -90,11 +88,31 @@ function perfilPorDefecto(
   };
 }
 
-function etiquetaPlan(plan: PlanVendido): string {
+function etiquetaPlan(plan: PlanVendido | null | undefined): string {
   if (plan === "essential") return "Essential";
   if (plan === "custom") return "Custom";
-  if (plan === "partner_batch") return "Partner batch";
-  return "Otro";
+  if (plan === "partner_batch") return "Lote aliado";
+  if (plan === "other") return "Otro";
+  return "Sin detectar";
+}
+
+function etiquetaVisibilidad(visibility: VisibilidadPerfil | null | undefined) {
+  if (visibility === "public") return "Perfil público";
+  if (visibility === "private") return "Perfil privado";
+  if (visibility === "lost_mode") return "Modo perdido";
+  return "Sin configurar";
+}
+
+function getVisibilityClass(visibility: VisibilidadPerfil | null | undefined) {
+  if (visibility === "lost_mode") {
+    return "border-orange-400/20 bg-orange-400/10 text-orange-200";
+  }
+
+  if (visibility === "private") {
+    return "border-white/10 bg-white/5 text-white/65";
+  }
+
+  return "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200";
 }
 
 export default function ManagePetPublicProfile() {
@@ -115,8 +133,9 @@ export default function ManagePetPublicProfile() {
   const [perfil, setPerfil] = useState<PerfilMascota | null>(null);
   const [visibilidadOriginal, setVisibilidadOriginal] =
     useState<VisibilidadPerfil>("public");
+
   const [tagActivo, setTagActivo] = useState<PetTagActivo | null>(null);
-  const [codigoTagActivo, setCodigoTagActivo] = useState<string>("");
+  const [codigoTagActivo, setCodigoTagActivo] = useState("");
 
   useEffect(() => {
     if (authLoading) return;
@@ -159,7 +178,7 @@ export default function ManagePetPublicProfile() {
           .eq("owner_user_id", user.id)
           .single();
 
-        if (petError) {
+        if (petError || !petData) {
           throw new Error("No se pudo cargar la mascota.");
         }
 
@@ -191,62 +210,72 @@ export default function ManagePetPublicProfile() {
           throw new Error("No se pudo cargar el perfil público de la mascota.");
         }
 
-        const { data: activePetTag, error: activeTagError } = await supabase
+        const { data: activePetTags, error: activeTagsError } = await supabase
           .from("pet_tags")
           .select("tag_id, sold_plan_type")
           .eq("pet_id", petId)
           .eq("status", "active")
-          .order("assigned_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .order("assigned_at", { ascending: false });
 
-        if (activeTagError) {
-          console.error("Error cargando placa activa:", activeTagError);
+        if (activeTagsError) {
+          console.error("Error cargando placas activas:", activeTagsError);
           setMensajeAdvertencia(
-            "No se pudo cargar la placa activa de esta mascota. El resto del formulario sí está disponible."
+            "No se pudieron cargar las placas activas de esta mascota. El resto del formulario sí está disponible."
           );
         }
 
-        let planDetectado: PlanVendido | null = null;
+        const activeTags = ((activePetTags ?? []) as PetTagActivo[]) || [];
+        const customTag = activeTags.find(
+          (tag) => tag.sold_plan_type === "custom"
+        );
+        const primaryDetectedTag = customTag ?? activeTags[0] ?? null;
+
+        setTagActivo(primaryDetectedTag);
+
         let codigoDetectado = "";
 
-        if (activePetTag) {
-          const tagRow = activePetTag as PetTagActivo;
-          planDetectado = tagRow.sold_plan_type;
-          setTagActivo(tagRow);
-
+        if (primaryDetectedTag?.tag_id) {
           const { data: tagData, error: tagDataError } = await supabase
             .from("tags")
             .select("code")
-            .eq("id", tagRow.tag_id)
+            .eq("id", primaryDetectedTag.tag_id)
             .maybeSingle();
 
           if (tagDataError) {
             console.error("Error cargando código de la placa:", tagDataError);
           } else {
             codigoDetectado = (tagData as TagResumen | null)?.code || "";
-            setCodigoTagActivo(codigoDetectado);
           }
-        } else {
-          setTagActivo(null);
-          setCodigoTagActivo("");
         }
+
+        setCodigoTagActivo(codigoDetectado);
+
+        const hasCustomActive = !!customTag;
+        const perfilExistente = (profileData as PerfilMascota | null) ?? null;
+
+        const medicalProfileEnabled =
+          !!perfilExistente?.medical_profile_enabled || hasCustomActive;
 
         const perfilNormalizado: PerfilMascota =
-          (profileData as PerfilMascota | null) ??
-          perfilPorDefecto(petId, planDetectado);
+          perfilExistente ?? perfilPorDefecto(petId, medicalProfileEnabled);
 
-        perfilNormalizado.allow_found_reports = true;
+        const perfilFinal: PerfilMascota = {
+          ...perfilNormalizado,
+          allow_found_reports: true,
+          medical_profile_enabled: medicalProfileEnabled,
+          show_medical_alerts: medicalProfileEnabled
+            ? !!perfilNormalizado.show_medical_alerts
+            : false,
+          emergency_message: medicalProfileEnabled
+            ? perfilNormalizado.emergency_message
+            : null,
+        };
 
-        if (!perfilNormalizado.medical_profile_enabled) {
-          perfilNormalizado.show_medical_alerts = false;
-          perfilNormalizado.emergency_message = null;
-        }
-
-        setPerfil(perfilNormalizado);
-        setVisibilidadOriginal(perfilNormalizado.visibility_status);
+        setPerfil(perfilFinal);
+        setVisibilidadOriginal(perfilFinal.visibility_status);
       } catch (error) {
         console.error("Error cargando ManagePetPublicProfile:", error);
+
         setMensajeError(
           error instanceof Error
             ? error.message
@@ -273,6 +302,7 @@ export default function ManagePetPublicProfile() {
 
   const etiquetaRaza = useMemo(() => {
     if (!mascota) return null;
+
     const raza = primeraRelacion(mascota.pet_breeds);
 
     if (mascota.breed_custom?.trim()) return mascota.breed_custom.trim();
@@ -297,6 +327,7 @@ export default function ManagePetPublicProfile() {
   ) => {
     setPerfil((actual) => {
       if (!actual) return actual;
+
       return {
         ...actual,
         [campo]: valor,
@@ -307,7 +338,7 @@ export default function ManagePetPublicProfile() {
     setMensajeExito("");
   };
 
-  const guardarCambios = async (event: React.FormEvent<HTMLFormElement>) => {
+  const guardarCambios = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!petId || !perfil) {
@@ -393,6 +424,7 @@ export default function ManagePetPublicProfile() {
       setMensajeExito("Perfil público actualizado correctamente.");
     } catch (error) {
       console.error("Error guardando perfil público:", error);
+
       setMensajeError(
         error instanceof Error
           ? error.message
@@ -419,6 +451,37 @@ export default function ManagePetPublicProfile() {
     );
   }
 
+  if (mensajeError && !perfil) {
+    return (
+      <>
+        <Header />
+        <main className="min-h-screen bg-[#1A1A14] text-white">
+          <section className="mokko-container py-12">
+            <div className="mx-auto max-w-5xl rounded-[32px] border border-red-400/20 bg-red-400/10 px-6 py-12">
+              <div className="text-2xl font-semibold">
+                No se pudo cargar el perfil
+              </div>
+              <p className="mt-3 text-sm leading-7 text-red-200">
+                {mensajeError}
+              </p>
+
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={() => navigate("/mis-mascotas")}
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/[0.08]"
+                >
+                  Volver a mis mascotas
+                </button>
+              </div>
+            </div>
+          </section>
+        </main>
+        <Footer />
+      </>
+    );
+  }
+
   return (
     <>
       <Header />
@@ -427,71 +490,17 @@ export default function ManagePetPublicProfile() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
-            <div className="mx-auto max-w-5xl">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <Link
-                  to="/mis-mascotas"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/[0.08]"
-                >
-                  <ChevronLeft className="h-4.5 w-4.5" />
-                  Volver a mis mascotas
-                </Link>
+          <div className="mokko-container relative z-10 py-7 md:py-14">
+            <div className="mx-auto max-w-6xl">
+              <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[36px] md:p-8">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-5">
+                    <span className="mokko-badge mokko-badge-primary w-fit">
+                      Perfil público de la mascota
+                    </span>
 
-                {urlPublica && (
-                  <a
-                    href={urlPublica}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm font-medium text-[#f6df8a] transition hover:bg-[#E8C547]/14"
-                  >
-                    <Link2 className="h-4.5 w-4.5" />
-                    Ver perfil público
-                  </a>
-                )}
-              </div>
-
-              <div className="mt-6">
-                <span className="mokko-badge mokko-badge-primary w-fit">
-                  Perfil público de la mascota
-                </span>
-
-                <h1 className="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">
-                  Configura cómo se mostrará{" "}
-                  <span className="text-[#E8C547]">
-                    {mascota?.name || "tu mascota"}
-                  </span>
-                </h1>
-
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                  Define el modo del perfil y qué datos se mostrarán al escanear
-                  la placa.
-                </p>
-              </div>
-
-              {mensajeError && (
-                <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                  {mensajeError}
-                </div>
-              )}
-
-              {mensajeExito && (
-                <div className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                  {mensajeExito}
-                </div>
-              )}
-
-              {mensajeAdvertencia && !mensajeError && (
-                <div className="mt-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                  {mensajeAdvertencia}
-                </div>
-              )}
-
-              <div className="mt-8 grid gap-6 lg:grid-cols-[0.96fr_1.04fr]">
-                <div className="space-y-6">
-                  <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
-                    <div className="flex items-center gap-4">
-                      <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
                         {mascota?.photo_url ? (
                           <img
                             src={mascota.photo_url}
@@ -506,46 +515,96 @@ export default function ManagePetPublicProfile() {
                       </div>
 
                       <div>
-                        <div className="text-2xl font-semibold">
-                          {mascota?.name}
-                        </div>
-                        <div className="mt-1 text-sm text-white/60">
+                        <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                          {mascota?.name || "Tu mascota"}
+                        </h1>
+
+                        <p className="mt-2 text-sm leading-7 text-white/70 sm:text-base">
                           {etiquetaEspecie}
                           {etiquetaRaza ? ` • ${etiquetaRaza}` : ""}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <StatusPill
+                            className={getVisibilityClass(
+                              perfil?.visibility_status
+                            )}
+                          >
+                            {etiquetaVisibilidad(perfil?.visibility_status)}
+                          </StatusPill>
+
+                          {codigoTagActivo ? (
+                            <StatusPill className="border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200">
+                              Placa {codigoTagActivo}
+                            </StatusPill>
+                          ) : (
+                            <StatusPill className="border-red-400/20 bg-red-400/10 text-red-200">
+                              Sin placa activa
+                            </StatusPill>
+                          )}
+
+                          {tienePerfilMedico && (
+                            <StatusPill className="border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]">
+                              Ficha médica
+                            </StatusPill>
+                          )}
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="mt-6 grid gap-3">
-                      <ResumenItem
-                        label="Placa activa"
-                        value={codigoTagActivo || "Sin placa activa"}
-                      />
-                      <ResumenItem
-                        label="Plan detectado"
-                        value={
-                          tagActivo
-                            ? etiquetaPlan(tagActivo.sold_plan_type)
-                            : "Sin detectar"
-                        }
-                      />
-                      {tienePerfilMedico && (
-                        <ResumenItem
-                          label="Perfil médico"
-                          value="Desbloqueado"
-                        />
-                      )}
-                    </div>
-                  </section>
+                  <div className="grid gap-3 sm:flex sm:flex-wrap">
+                    <Link
+                      to="/mis-mascotas"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/[0.08] sm:w-auto sm:py-3.5"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Volver
+                    </Link>
 
-                  <section className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]">
+                    {urlPublica && (
+                      <a
+                        href={urlPublica}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
+                      >
+                        <Link2 className="h-4 w-4" />
+                        Ver perfil público
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {mensajeError && (
+                <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                  {mensajeError}
+                </div>
+              )}
+
+              {mensajeExito && (
+                <div className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
+                  {mensajeExito}
+                </div>
+              )}
+
+              {mensajeAdvertencia && !mensajeError && (
+                <div className="mt-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm leading-6 text-[#f6df8a]">
+                  {mensajeAdvertencia}
+                </div>
+              )}
+
+              <div className="mt-7 grid gap-6 lg:grid-cols-[0.96fr_1.04fr]">
+                <div className="order-2 grid content-start gap-6 lg:order-1">
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px]">
                     <div className="flex items-center gap-3">
                       {esPrivado ? (
                         <Shield className="h-5 w-5 text-white/70" />
                       ) : esLostMode ? (
                         <Siren className="h-5 w-5 text-[#E8C547]" />
                       ) : (
-                        <Eye className="h-5 w-5 text-[#9fd598]" />
+                        <Eye className="h-5 w-5 text-green-200" />
                       )}
 
                       <h2 className="text-2xl font-semibold">
@@ -557,33 +616,75 @@ export default function ManagePetPublicProfile() {
                       {esPrivado
                         ? "En modo privado solo se mostrará el nombre y la foto de la mascota. Aun así, se podrá compartir ubicación o enviar un reporte."
                         : esLostMode
-                        ? "En modo perdido el perfil se mostrará con énfasis visual y usará el mensaje personalizado que definas más abajo."
-                        : "En modo público se mostrará la información permitida por tus toggles y el mensaje global del sistema."}
+                          ? "En modo perdido el perfil se mostrará con énfasis visual y usará el mensaje personalizado que definas más abajo."
+                          : "En modo público se mostrará la información permitida por tus opciones y el mensaje global del sistema."}
                     </div>
 
-                    <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75">
-                      <EyeOff className="h-4.5 w-4.5" />
-                      Los reportes y el envío de ubicación siempre estarán
-                      disponibles.
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-7 text-white/75">
+                      <div className="flex items-start gap-2">
+                        <EyeOff className="mt-1 h-4 w-4 shrink-0" />
+                        <span>
+                          Los reportes y el envío de ubicación siempre estarán
+                          disponibles.
+                        </span>
+                      </div>
                     </div>
 
                     {esPrivado && (
-                      <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/75">
-                        <EyeOff className="h-4.5 w-4.5" />
-                        Los toggles visuales quedan guardados, pero no se
-                        aplican mientras el perfil esté en privado.
+                      <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-7 text-white/75">
+                        <div className="flex items-start gap-2">
+                          <EyeOff className="mt-1 h-4 w-4 shrink-0" />
+                          <span>
+                            Las opciones visibles quedan guardadas, pero no se
+                            aplican mientras el perfil esté en privado.
+                          </span>
+                        </div>
                       </div>
                     )}
+                  </section>
+
+                  <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px]">
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-semibold">
+                        Resumen rápido
+                      </h2>
+                      <p className="text-sm leading-7 text-white/65">
+                        Estado actual de la placa y funciones disponibles.
+                      </p>
+                    </div>
+
+                    <div className="mt-5 grid gap-3">
+                      <ResumenItem
+                        label="Placa activa"
+                        value={codigoTagActivo || "Sin placa activa"}
+                      />
+                      <ResumenItem
+                        label="Plan detectado"
+                        value={etiquetaPlan(tagActivo?.sold_plan_type)}
+                      />
+                      <ResumenItem
+                        label="Perfil médico"
+                        value={
+                          tienePerfilMedico ? "Desbloqueado" : "No desbloqueado"
+                        }
+                      />
+                      <ResumenItem
+                        label="Reportes"
+                        value="Siempre disponibles"
+                      />
+                    </div>
                   </section>
                 </div>
 
                 <form
                   onSubmit={guardarCambios}
-                  className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.28)]"
+                  className="order-1 rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px] lg:order-2"
                 >
-                  <div className="space-y-8">
+                  <div className="space-y-7 sm:space-y-8">
                     <section>
-                      <h2 className="text-2xl font-semibold">Modo del perfil</h2>
+                      <h2 className="text-2xl font-semibold">
+                        Modo del perfil
+                      </h2>
                       <p className="mt-2 text-sm leading-7 text-white/65">
                         Elige cómo quieres mostrar el perfil cuando alguien
                         escanee la placa.
@@ -680,24 +781,25 @@ export default function ManagePetPublicProfile() {
                           }
                           disabled={esPrivado}
                           placeholder="Ej. Vive por el parque central de Miraflores."
-                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-base outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-60 sm:py-3.5"
                         />
                       </div>
                     </section>
 
                     {tienePerfilMedico && (
                       <section className="rounded-[28px] border border-[#E8C547]/25 bg-[#E8C547]/10 p-5">
-                        <div className="flex items-center gap-3">
-                          <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
+                        <div className="flex items-start gap-3">
+                          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
                             <Sparkles className="h-5 w-5" />
                           </div>
+
                           <div>
                             <h3 className="text-xl font-semibold text-white">
                               Perfil médico
                             </h3>
                             <p className="mt-1 text-sm leading-7 text-white/75">
                               Estas opciones están disponibles porque esta
-                              mascota ya tiene el perfil médico desbloqueado.
+                              mascota tiene funciones Custom.
                             </p>
                           </div>
                         </div>
@@ -729,8 +831,9 @@ export default function ManagePetPublicProfile() {
                             }
                             disabled={esPrivado || !perfil?.show_medical_alerts}
                             placeholder="Ej. Si necesita medicación, comunícate lo antes posible."
-                            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-base outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-60 sm:py-3.5"
                           />
+
                           {!perfil?.show_medical_alerts && (
                             <p className="mt-2 text-xs leading-6 text-white/55">
                               Este mensaje solo se muestra si activas las alertas
@@ -758,10 +861,14 @@ export default function ManagePetPublicProfile() {
                         }`}
                       >
                         {esLostMode && (
-                          <div className="mb-3 inline-flex items-center gap-2 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/12 px-3 py-2 text-sm text-[#f6df8a]">
-                            <AlertTriangle className="h-4 w-4" />
-                            Este mensaje se mostrará al público cuando la
-                            mascota esté en modo perdido.
+                          <div className="mb-3 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/12 px-3 py-2 text-sm leading-6 text-[#f6df8a]">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                              <span>
+                                Este mensaje se mostrará al público cuando la
+                                mascota esté en modo perdido.
+                              </span>
+                            </div>
                           </div>
                         )}
 
@@ -778,13 +885,13 @@ export default function ManagePetPublicProfile() {
                             )
                           }
                           placeholder="Ej. Mi mascota está perdida. Si la ves, comparte tu ubicación o comunícate de inmediato."
-                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
+                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-base outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 sm:py-3.5"
                         />
                       </div>
                     </section>
 
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-6">
-                      <div className="text-sm text-white/55">
+                    <div className="grid gap-3 border-t border-white/10 pt-6 sm:flex sm:items-center sm:justify-between">
+                      <div className="text-sm leading-6 text-white/55">
                         Los cambios se aplicarán al perfil visible al escanear la
                         placa.
                       </div>
@@ -792,9 +899,9 @@ export default function ManagePetPublicProfile() {
                       <button
                         type="submit"
                         disabled={guardando || !perfil}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3.5"
                       >
-                        <CheckCircle2 className="h-4.5 w-4.5" />
+                        <CheckCircle2 className="h-4 w-4" />
                         {guardando ? "Guardando..." : "Guardar cambios"}
                       </button>
                     </div>
@@ -811,13 +918,7 @@ export default function ManagePetPublicProfile() {
   );
 }
 
-function ResumenItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function ResumenItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
       <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
@@ -858,7 +959,7 @@ function SelectorModo({
         </div>
 
         <div
-          className={`mt-1 h-4 w-4 rounded-full border ${
+          className={`mt-1 h-4 w-4 shrink-0 rounded-full border ${
             activo ? "border-[#E8C547] bg-[#E8C547]" : "border-white/25"
           }`}
         />
@@ -890,7 +991,9 @@ function ToggleFila({
     >
       <div>
         <div className="text-base font-semibold text-white">{titulo}</div>
-        <div className="mt-1 text-sm leading-7 text-white/65">{descripcion}</div>
+        <div className="mt-1 text-sm leading-7 text-white/65">
+          {descripcion}
+        </div>
       </div>
 
       <input
@@ -898,8 +1001,24 @@ function ToggleFila({
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
         disabled={disabled}
-        className="mt-1 h-5 w-5 rounded border-white/20 bg-transparent accent-[#E8C547]"
+        className="mt-1 h-5 w-5 shrink-0 rounded border-white/20 bg-transparent accent-[#E8C547]"
       />
     </label>
+  );
+}
+
+function StatusPill({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className: string;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] ${className}`}
+    >
+      {children}
+    </span>
   );
 }

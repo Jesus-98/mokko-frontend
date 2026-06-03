@@ -30,6 +30,8 @@ const INITIAL_METRICS: AdminMetrics = {
   verifiedRevenueTotal: 0,
 };
 
+type PriorityTone = "neutral" | "warm" | "green";
+
 function formatCurrency(value: number, currency = "PEN") {
   try {
     return new Intl.NumberFormat("es-PE", {
@@ -64,6 +66,18 @@ function getChannelLabel(channel: string) {
   };
 
   return map[channel] || channel;
+}
+
+function getPriorityClass(tone: PriorityTone) {
+  if (tone === "warm") {
+    return "border-[#E8C547]/20 bg-[#E8C547]/10";
+  }
+
+  if (tone === "green") {
+    return "border-[#2D5A27]/30 bg-[#2D5A27]/15";
+  }
+
+  return "border-white/10 bg-white/[0.04]";
 }
 
 export default function AdminDashboard() {
@@ -112,6 +126,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (authLoading) return;
+
     if (role !== "admin") {
       setLoading(false);
       return;
@@ -125,25 +140,25 @@ export default function AdminDashboard() {
       {
         title: "Pedidos totales",
         value: metrics.totalOrders,
-        subtitle: "Órdenes registradas en el sistema",
+        subtitle: "Órdenes registradas",
         variant: "metricNeutral" as const,
       },
       {
         title: "Pendientes de pago",
         value: metrics.pendingPaymentOrders,
-        subtitle: "Pedidos aún por regularizar",
+        subtitle: "Por regularizar",
         variant: "metricWarm" as const,
       },
       {
         title: "En producción",
         value: metrics.inProductionOrders,
-        subtitle: "Pedidos actualmente en proceso",
+        subtitle: "Actualmente en proceso",
         variant: "metricNeutral" as const,
       },
       {
         title: "Entregados",
         value: metrics.deliveredOrders,
-        subtitle: "Pedidos entregados al cliente",
+        subtitle: "Completados",
         variant: "metricGreen" as const,
       },
     ],
@@ -155,27 +170,21 @@ export default function AdminDashboard() {
       {
         title: "Ingresos del mes",
         value: formatCurrency(metrics.verifiedRevenueMonth),
-        subtitle: "Pagos verificados del mes actual",
+        subtitle: "Pagos verificados",
         variant: "metricGreen" as const,
       },
       {
         title: "Ingresos acumulados",
         value: formatCurrency(metrics.verifiedRevenueTotal),
-        subtitle: "Histórico de pagos verificados",
+        subtitle: "Histórico verificado",
         variant: "metricNeutral" as const,
       },
       {
         title: "Reportes nuevos",
         value: metrics.newReports,
-        subtitle: "Incidencias pendientes de atención",
+        subtitle: "Incidencias pendientes",
         variant: "metricWarm" as const,
       },
-    ],
-    [metrics]
-  );
-
-  const supportMetrics = useMemo(
-    () => [
       {
         title: "Usuarios",
         value: metrics.totalUsers,
@@ -185,11 +194,49 @@ export default function AdminDashboard() {
       {
         title: "Mascotas activas",
         value: metrics.activePets,
-        subtitle: "Mascotas activas en el sistema",
+        subtitle: "Registradas en el sistema",
         variant: "metricGreen" as const,
       },
     ],
     [metrics]
+  );
+
+  const priorityItems = useMemo(
+    () => [
+      {
+        label: "Pendientes de pago",
+        value: metrics.pendingPaymentOrders,
+        description: "Pedidos que requieren validación o seguimiento.",
+        tone: "warm" as PriorityTone,
+        actionLabel: "Ver pedidos",
+        onClick: () => navigate("/admin/pedidos"),
+      },
+      {
+        label: "En producción",
+        value: metrics.inProductionOrders,
+        description: "Pedidos que están en fabricación o preparación.",
+        tone: "neutral" as PriorityTone,
+        actionLabel: "Abrir producción",
+        onClick: () => navigate("/admin/pedidos"),
+      },
+      {
+        label: "Reportes nuevos",
+        value: metrics.newReports,
+        description: "Reportes de hallazgo que conviene revisar pronto.",
+        tone: "warm" as PriorityTone,
+        actionLabel: "Ver reportes",
+        onClick: () => navigate("/admin/reportes"),
+      },
+      {
+        label: "Mascotas activas",
+        value: metrics.activePets,
+        description: "Base activa de mascotas registradas.",
+        tone: "green" as PriorityTone,
+        actionLabel: "Ver mascotas",
+        onClick: () => navigate("/admin/mascotas"),
+      },
+    ],
+    [metrics, navigate]
   );
 
   const quickActions = useMemo(
@@ -211,7 +258,7 @@ export default function AdminDashboard() {
       },
       {
         title: "Mascotas",
-        description: "Revisa mascotas registradas y sus datos.",
+        description: "Revisa mascotas registradas y sus perfiles.",
         onClick: () => navigate("/admin/mascotas"),
       },
       {
@@ -250,322 +297,294 @@ export default function AdminDashboard() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
+          <div className="mokko-container relative z-10 py-7 md:py-14">
             <div className="mx-auto max-w-7xl">
               <AdminPageHeader
                 badge="Panel administrativo"
                 title={`Hola, ${displayName}`}
-                description="Centro de control de Mokko para pedidos, usuarios, mascotas y reportes. Diseñado para operar de forma clara hoy y escalar después."
+                description="Centro de control de Mokko para pedidos, usuarios, mascotas, placas y reportes."
                 actions={
-                  <>
+                  <div className="grid w-full gap-3 sm:flex sm:w-auto sm:flex-wrap">
                     <Button
                       variant="ghost"
                       onClick={() => navigate("/dashboard")}
                       disabled={showLoading}
+                      className="w-full sm:w-auto"
                     >
-                      Ir a dashboard cliente
+                      Dashboard cliente
                     </Button>
 
                     <Button
                       variant="ghost"
                       onClick={() => void loadDashboard()}
                       disabled={showLoading}
+                      className="w-full sm:w-auto"
                     >
-                      Refrescar panel
+                      Refrescar
                     </Button>
 
                     <Button
                       variant="primary"
                       onClick={() => navigate("/admin/pedidos")}
                       disabled={showLoading}
-                      className="px-5 py-3"
+                      className="w-full px-5 py-3 sm:w-auto"
                     >
                       Abrir pedidos
                     </Button>
-                  </>
+                  </div>
                 }
               />
-            </div>
 
-            <AdminFlashMessages
-              error={error || ""}
-              className="mx-auto mt-6 max-w-7xl"
-            />
+              <AdminFlashMessages error={error || ""} className="mt-6" />
 
-            <div className="mt-8">
-              <SectionTitle
-                title="Indicadores principales"
-                description="Lectura rápida del estado operativo actual."
-              />
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {mainMetrics.map((item) => (
-                  <AdminMetricCard
-                    key={item.title}
-                    title={item.title}
-                    value={item.value}
-                    subtitle={item.subtitle}
-                    variant={item.variant}
-                    loading={loading}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-8">
-              <SectionTitle
-                title="Negocio y soporte"
-                description="Métricas clave para seguimiento comercial y atención."
-              />
-
-              <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-                {businessMetrics.map((item) => (
-                  <AdminMetricCard
-                    key={item.title}
-                    title={item.title}
-                    value={item.value}
-                    subtitle={item.subtitle}
-                    variant={item.variant}
-                    loading={loading}
-                  />
-                ))}
-
-                {supportMetrics.map((item) => (
-                  <AdminMetricCard
-                    key={item.title}
-                    title={item.title}
-                    value={item.value}
-                    subtitle={item.subtitle}
-                    variant={item.variant}
-                    loading={loading}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-8">
-              <SectionTitle
-                title="Módulos administrativos"
-                description="Accede a las áreas principales del panel."
-              />
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                {adminModules.map((module) => (
-                  <AdminModuleCard
-                    key={module.key}
-                    title={module.title}
-                    description={module.description}
-                    actionLabel="Abrir módulo"
-                    onClick={() => navigate(module.href)}
-                    disabled={showLoading}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-8 grid gap-6 xl:grid-cols-2">
-              <Card variant="panel" className="p-6">
+              <section className="mt-8">
                 <SectionTitle
-                  title="Ventas por mes"
-                  description="Pagos verificados en los últimos 6 meses."
+                  title="Prioridad operativa"
+                  description="Lo que conviene revisar primero para operar hoy."
                 />
 
-                <div className="mt-6">
-                  {loading ? (
-                    <div className="text-sm text-white/60">
-                      Cargando gráfico...
-                    </div>
-                  ) : salesByMonth.length === 0 ? (
-                    <AdminEmptyState
-                      title="Sin datos todavía"
-                      description="Aún no hay ventas verificadas para mostrar."
-                    />
-                  ) : (
-                    <AdminBarChart
-                      items={salesByMonth}
-                      valueFormatter={(value) => formatCurrency(value)}
-                    />
-                  )}
-                </div>
-              </Card>
-
-              <Card variant="panelWarm" className="p-6">
-                <SectionTitle
-                  title="Accesos rápidos"
-                  description="Atajos para las tareas más frecuentes."
-                />
-
-                <div className="mt-6 grid gap-3">
-                  {quickActions.map((item) => (
+                <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {priorityItems.map((item) => (
                     <button
-                      key={item.title}
+                      key={item.label}
                       type="button"
                       onClick={item.onClick}
                       disabled={showLoading}
-                      className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-4 text-left transition hover:border-[#E8C547]/20 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60"
+                      className={`rounded-[26px] border p-5 text-left shadow-[0_18px_60px_rgba(0,0,0,0.18)] transition hover:border-[#E8C547]/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60 ${getPriorityClass(
+                        item.tone
+                      )}`}
                     >
-                      <div className="text-base font-semibold text-[#F5F0E8]">
-                        {item.title}
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                        {item.label}
                       </div>
-                      <div className="mt-1 text-sm leading-7 text-white/65">
+
+                      <div className="mt-3 text-3xl font-semibold text-[#F5F0E8]">
+                        {showLoading ? "..." : item.value}
+                      </div>
+
+                      <p className="mt-2 text-sm leading-7 text-white/62">
                         {item.description}
+                      </p>
+
+                      <div className="mt-4 text-sm font-semibold text-[#E8C547]">
+                        {item.actionLabel} →
                       </div>
                     </button>
                   ))}
                 </div>
-              </Card>
-            </div>
+              </section>
 
-            <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-              <Card variant="panel" className="p-6">
+              <section className="mt-8">
                 <SectionTitle
-                  title="Actividad reciente"
-                  description="Últimos pedidos registrados."
+                  title="Indicadores principales"
+                  description="Lectura rápida del estado actual de pedidos."
                 />
 
-                <div className="mt-6 space-y-3">
-                  {loading ? (
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
-                      Cargando actividad reciente...
-                    </div>
-                  ) : recentOrders.length === 0 ? (
-                    <AdminEmptyState
-                      title="Aún no hay pedidos recientes"
-                      description="Cuando se registren pedidos aparecerán aquí."
+                <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {mainMetrics.map((item) => (
+                    <AdminMetricCard
+                      key={item.title}
+                      title={item.title}
+                      value={item.value}
+                      subtitle={item.subtitle}
+                      variant={item.variant}
+                      loading={loading}
                     />
-                  ) : (
-                    recentOrders.map((order) => (
+                  ))}
+                </div>
+              </section>
+
+              <section className="mt-8">
+                <SectionTitle
+                  title="Negocio y soporte"
+                  description="Métricas clave para seguimiento comercial y atención."
+                />
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  {businessMetrics.map((item) => (
+                    <AdminMetricCard
+                      key={item.title}
+                      title={item.title}
+                      value={item.value}
+                      subtitle={item.subtitle}
+                      variant={item.variant}
+                      loading={loading}
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <section className="mt-8">
+                <SectionTitle
+                  title="Módulos administrativos"
+                  description="Accede a las áreas principales del panel."
+                />
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  {adminModules.map((module) => (
+                    <AdminModuleCard
+                      key={module.key}
+                      title={module.title}
+                      description={module.description}
+                      actionLabel="Abrir módulo"
+                      onClick={() => navigate(module.href)}
+                      disabled={showLoading}
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <section className="mt-8 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+                <Card variant="panel" className="p-5 sm:p-6">
+                  <SectionTitle
+                    title="Ventas por mes"
+                    description="Pagos verificados en los últimos 6 meses."
+                  />
+
+                  <div className="mt-6">
+                    {loading ? (
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
+                        Cargando gráfico...
+                      </div>
+                    ) : salesByMonth.length === 0 ? (
+                      <AdminEmptyState
+                        title="Sin datos todavía"
+                        description="Aún no hay ventas verificadas para mostrar."
+                      />
+                    ) : (
+                      <AdminBarChart
+                        items={salesByMonth}
+                        valueFormatter={(value) => formatCurrency(value)}
+                      />
+                    )}
+                  </div>
+                </Card>
+
+                <Card variant="panelWarm" className="p-5 sm:p-6">
+                  <SectionTitle
+                    title="Accesos rápidos"
+                    description="Atajos para las tareas más frecuentes."
+                  />
+
+                  <div className="mt-6 grid gap-3">
+                    {quickActions.map((item) => (
                       <button
-                        key={order.id}
+                        key={item.title}
                         type="button"
-                        onClick={() => navigate("/admin/pedidos")}
-                        className="w-full rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-left transition hover:border-[#E8C547]/20 hover:bg-white/[0.05]"
+                        onClick={item.onClick}
+                        disabled={showLoading}
+                        className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-4 text-left transition hover:border-[#E8C547]/20 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="text-base font-semibold text-[#F5F0E8]">
-                                {order.order_number}
-                              </div>
-                              <AdminStatusBadge status={order.status} />
-                            </div>
-
-                            <div className="mt-2 text-sm text-white/65">
-                              {order.guest_name || "Sin nombre"} ·{" "}
-                              {order.guest_phone || "Sin teléfono"} ·{" "}
-                              {getChannelLabel(order.sales_channel)}
-                            </div>
-                          </div>
-
-                          <div className="text-left md:text-right">
-                            <div className="text-sm font-semibold text-[#F5F0E8]">
-                              {formatCurrency(
-                                Number(order.total || 0),
-                                order.currency || "PEN"
-                              )}
-                            </div>
-                            <div className="mt-1 text-xs uppercase tracking-[0.12em] text-white/45">
-                              {formatDate(order.created_at)}
-                            </div>
-                          </div>
+                        <div className="text-base font-semibold text-[#F5F0E8]">
+                          {item.title}
+                        </div>
+                        <div className="mt-1 text-sm leading-7 text-white/65">
+                          {item.description}
                         </div>
                       </button>
-                    ))
-                  )}
+                    ))}
+                  </div>
+                </Card>
+              </section>
+
+              <section className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+                <Card variant="panel" className="p-5 sm:p-6">
+                  <SectionTitle
+                    title="Actividad reciente"
+                    description="Últimos pedidos registrados."
+                  />
+
+                  <div className="mt-6 space-y-3">
+                    {loading ? (
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-5 text-sm text-white/60">
+                        Cargando actividad reciente...
+                      </div>
+                    ) : recentOrders.length === 0 ? (
+                      <AdminEmptyState
+                        title="Aún no hay pedidos recientes"
+                        description="Cuando se registren pedidos aparecerán aquí."
+                      />
+                    ) : (
+                      recentOrders.map((order) => (
+                        <button
+                          key={order.id}
+                          type="button"
+                          onClick={() => navigate("/admin/pedidos")}
+                          className="w-full rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-left transition hover:border-[#E8C547]/20 hover:bg-white/[0.05]"
+                        >
+                          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="break-all text-base font-semibold text-[#F5F0E8]">
+                                  {order.order_number}
+                                </div>
+                                <AdminStatusBadge status={order.status} />
+                              </div>
+
+                              <div className="mt-2 text-sm leading-7 text-white/65">
+                                {order.guest_name || "Sin nombre"} ·{" "}
+                                {order.guest_phone || "Sin teléfono"} ·{" "}
+                                {getChannelLabel(order.sales_channel)}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-left md:min-w-[150px] md:text-right">
+                              <div className="text-sm font-semibold text-[#F5F0E8]">
+                                {formatCurrency(
+                                  Number(order.total || 0),
+                                  order.currency || "PEN"
+                                )}
+                              </div>
+                              <div className="mt-1 text-xs uppercase tracking-[0.12em] text-white/45">
+                                {formatDate(order.created_at)}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </Card>
+
+                <div className="grid gap-6">
+                  <Card variant="panelGreen" className="p-5 sm:p-6">
+                    <SectionTitle
+                      title="Resumen de atención"
+                      description="Lo más importante para operar hoy."
+                    />
+
+                    <div className="mt-6 grid gap-3">
+                      <MiniSummaryCard
+                        label="Pendientes de pago"
+                        value={loading ? "..." : metrics.pendingPaymentOrders}
+                      />
+
+                      <MiniSummaryCard
+                        label="En producción"
+                        value={loading ? "..." : metrics.inProductionOrders}
+                      />
+
+                      <MiniSummaryCard
+                        label="Reportes nuevos"
+                        value={loading ? "..." : metrics.newReports}
+                      />
+                    </div>
+                  </Card>
+
+                  <Card variant="panel" className="p-5 sm:p-6">
+                    <SectionTitle
+                      title="Cuenta activa"
+                      description="Resumen de la sesión actual."
+                    />
+
+                    <div className="mt-6 grid gap-3">
+                      <MiniInfoCard label="Correo" value={displayEmail} />
+                      <MiniInfoCard label="Nombre" value={displayName} />
+                      <MiniInfoCard label="Rol" value={role || "admin"} />
+                    </div>
+                  </Card>
                 </div>
-              </Card>
-
-              <div className="grid gap-6">
-                <Card variant="panelGreen" className="p-6">
-                  <SectionTitle
-                    title="Resumen de atención"
-                    description="Lo más importante para operar hoy."
-                  />
-
-                  <div className="mt-6 grid gap-3">
-                    <Card
-                      variant="dark"
-                      className="rounded-2xl p-4 shadow-none backdrop-blur-none"
-                    >
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        Pendientes de pago
-                      </div>
-                      <div className="mt-2 text-2xl font-semibold text-white/85">
-                        {loading ? "..." : metrics.pendingPaymentOrders}
-                      </div>
-                    </Card>
-
-                    <Card
-                      variant="dark"
-                      className="rounded-2xl p-4 shadow-none backdrop-blur-none"
-                    >
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        En producción
-                      </div>
-                      <div className="mt-2 text-2xl font-semibold text-white/85">
-                        {loading ? "..." : metrics.inProductionOrders}
-                      </div>
-                    </Card>
-
-                    <Card
-                      variant="dark"
-                      className="rounded-2xl p-4 shadow-none backdrop-blur-none"
-                    >
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        Reportes nuevos
-                      </div>
-                      <div className="mt-2 text-2xl font-semibold text-white/85">
-                        {loading ? "..." : metrics.newReports}
-                      </div>
-                    </Card>
-                  </div>
-                </Card>
-
-                <Card variant="panel" className="p-6">
-                  <SectionTitle
-                    title="Cuenta activa"
-                    description="Resumen de la sesión actual."
-                  />
-
-                  <div className="mt-6 grid gap-3">
-                    <Card
-                      variant="dark"
-                      className="rounded-2xl p-4 shadow-none backdrop-blur-none"
-                    >
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        Correo
-                      </div>
-                      <div className="mt-2 break-all text-sm font-medium text-white/85">
-                        {displayEmail}
-                      </div>
-                    </Card>
-
-                    <Card
-                      variant="dark"
-                      className="rounded-2xl p-4 shadow-none backdrop-blur-none"
-                    >
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        Nombre
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-white/85">
-                        {displayName}
-                      </div>
-                    </Card>
-
-                    <Card
-                      variant="dark"
-                      className="rounded-2xl p-4 shadow-none backdrop-blur-none"
-                    >
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        Rol
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-white/85">
-                        {role || "admin"}
-                      </div>
-                    </Card>
-                  </div>
-                </Card>
-              </div>
+              </section>
             </div>
           </div>
         </section>
@@ -573,5 +592,41 @@ export default function AdminDashboard() {
 
       <Footer />
     </>
+  );
+}
+
+function MiniSummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <Card
+      variant="dark"
+      className="rounded-2xl p-4 shadow-none backdrop-blur-none"
+    >
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-semibold text-white/85">{value}</div>
+    </Card>
+  );
+}
+
+function MiniInfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card
+      variant="dark"
+      className="rounded-2xl p-4 shadow-none backdrop-blur-none"
+    >
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+        {label}
+      </div>
+      <div className="mt-2 break-words text-sm font-medium text-white/85">
+        {value}
+      </div>
+    </Card>
   );
 }

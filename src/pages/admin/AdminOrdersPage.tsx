@@ -32,8 +32,12 @@ type OrderItemRow = {
   subtotal: number;
   customization_data: {
     color?: string | null;
+    color_label?: string | null;
     shape?: string | null;
+    shape_label?: string | null;
     size?: string | null;
+    size_code?: string | null;
+    size_label?: string | null;
     pet_name?: string | null;
   } | null;
 };
@@ -126,6 +130,13 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "cancelled",
 ];
 
+const ITEMS_PER_PAGE = 10;
+
+const inputClass =
+  "w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 disabled:cursor-not-allowed disabled:opacity-60";
+
+const dateInputClass = `${inputClass} [color-scheme:dark]`;
+
 function getStatusLabel(status: OrderStatus) {
   switch (status) {
     case "draft":
@@ -157,11 +168,11 @@ function getStatusClass(status: OrderStatus) {
       return "border-white/10 bg-white/5 text-white/75";
     case "pending_payment":
     case "payment_submitted":
-      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#E8C547]";
+      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]";
     case "paid":
     case "in_production":
     case "shipped":
-      return "border-white/10 bg-white/5 text-white/85";
+      return "border-blue-400/20 bg-blue-400/10 text-blue-200";
     case "ready":
       return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#F5F0E8]";
     case "delivered":
@@ -173,7 +184,9 @@ function getStatusClass(status: OrderStatus) {
   }
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string | null) {
+  if (!value) return "—";
+
   try {
     return new Date(value).toLocaleString("es-PE", {
       year: "numeric",
@@ -187,6 +200,16 @@ function formatDateTime(value: string) {
   }
 }
 
+function formatMoney(value: number | string | null | undefined, currency = "PEN") {
+  const amount = Number(value || 0);
+
+  if (currency === "PEN") {
+    return `S/ ${amount.toFixed(2)}`;
+  }
+
+  return `${amount.toFixed(2)} ${currency}`;
+}
+
 function getPlanLabel(plan: SoldPlanType) {
   switch (plan) {
     case "essential":
@@ -194,7 +217,7 @@ function getPlanLabel(plan: SoldPlanType) {
     case "custom":
       return "Custom";
     case "partner_batch":
-      return "Partner batch";
+      return "Lote aliado";
     case "other":
       return "Otro";
     default:
@@ -208,6 +231,8 @@ function formatChannelLabel(channel: string | null | undefined) {
   if (value === "web") return "Web";
   if (value === "admin") return "Admin";
   if (value === "partner") return "Aliado";
+  if (value === "manual") return "Manual";
+  if (value === "whatsapp") return "WhatsApp";
   if (!value) return "No definido";
 
   return channel || "No definido";
@@ -234,6 +259,26 @@ function formatShapeLabel(value: string | null | undefined) {
   return value;
 }
 
+function getColorLabelFromData(custom: OrderItemRow["customization_data"]) {
+  if (!custom) return null;
+  if (custom.color_label?.trim()) return custom.color_label.trim();
+  return custom.color ? formatColorLabel(custom.color) : null;
+}
+
+function getShapeLabelFromData(custom: OrderItemRow["customization_data"]) {
+  if (!custom) return null;
+  if (custom.shape_label?.trim()) return custom.shape_label.trim();
+  return custom.shape ? formatShapeLabel(custom.shape) : null;
+}
+
+function getSizeLabelFromData(custom: OrderItemRow["customization_data"]) {
+  if (!custom) return null;
+  if (custom.size_label?.trim()) return custom.size_label.trim();
+  if (custom.size?.trim()) return custom.size.trim();
+  if (custom.size_code?.trim()) return custom.size_code.trim();
+  return null;
+}
+
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
 }
@@ -252,16 +297,20 @@ function csvEscape(value: unknown) {
 }
 
 function buildItemSummary(item: OrderItemRow, index: number) {
-  const custom = item.customization_data || {};
+  const custom = item.customization_data || null;
+  const colorLabel = getColorLabelFromData(custom);
+  const shapeLabel = getShapeLabelFromData(custom);
+  const sizeLabel = getSizeLabelFromData(custom);
+
   const parts: string[] = [];
 
   parts.push(`Placa ${index + 1}`);
   parts.push(getPlanLabel(item.sold_plan_type));
 
-  if (custom.pet_name) parts.push(`Nombre: ${custom.pet_name}`);
-  if (custom.color) parts.push(`Color: ${formatColorLabel(custom.color)}`);
-  if (custom.shape) parts.push(`Forma: ${formatShapeLabel(custom.shape)}`);
-  if (custom.size) parts.push(`Tamaño: ${String(custom.size)}`);
+  if (custom?.pet_name) parts.push(`Nombre: ${custom.pet_name}`);
+  if (colorLabel) parts.push(`Color: ${colorLabel}`);
+  if (shapeLabel) parts.push(`Forma: ${shapeLabel}`);
+  if (sizeLabel) parts.push(`Tamaño: ${sizeLabel}`);
 
   return parts.join(" · ");
 }
@@ -282,13 +331,8 @@ function matchesQuickFilter(status: OrderStatus, filter: QuickFilter) {
     );
   }
 
-  if (filter === "delivered") {
-    return status === "delivered";
-  }
-
-  if (filter === "cancelled") {
-    return status === "cancelled";
-  }
+  if (filter === "delivered") return status === "delivered";
+  if (filter === "cancelled") return status === "cancelled";
 
   return true;
 }
@@ -326,12 +370,14 @@ function formatDateInput(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
+
   return `${year}-${month}-${day}`;
 }
 
 function getTodayDateInput() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
   return formatDateInput(today);
 }
 
@@ -339,6 +385,7 @@ function getRelativeDateInput(daysAgo: number) {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
   date.setDate(date.getDate() - daysAgo);
+
   return formatDateInput(date);
 }
 
@@ -388,6 +435,28 @@ function buildPagination(currentPage: number, totalPages: number) {
   return items;
 }
 
+function getPhoneDigits(value: string | null | undefined) {
+  return (value || "").replace(/\D/g, "");
+}
+
+function getPhoneCallUrl(value: string | null | undefined) {
+  const digits = getPhoneDigits(value);
+  if (!digits) return "";
+
+  return `tel:${digits}`;
+}
+
+function getWhatsAppUrl(value: string | null | undefined, orderNumber: string) {
+  const digits = getPhoneDigits(value);
+  if (!digits) return "";
+
+  const message = encodeURIComponent(
+    `Hola, te escribimos de Mokko por tu pedido ${orderNumber}.`
+  );
+
+  return `https://wa.me/${digits}?text=${message}`;
+}
+
 export default function AdminOrdersPage() {
   const { role, loading: authLoading } = useAuth();
 
@@ -423,8 +492,6 @@ export default function AdminOrdersPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
-
-  const ITEMS_PER_PAGE = 10;
 
   const loadOrders = useCallback(async () => {
     if (role !== "admin") return;
@@ -622,6 +689,7 @@ export default function AdminOrdersPage() {
       setWarningMsg(warnings.join(" "));
     } catch (error) {
       console.error("AdminOrdersPage load error:", error);
+
       setErrorMsg(
         error instanceof Error
           ? error.message
@@ -635,6 +703,7 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     if (authLoading) return;
     if (role !== "admin") return;
+
     void loadOrders();
   }, [authLoading, role, loadOrders]);
 
@@ -875,6 +944,7 @@ export default function AdminOrdersPage() {
   const paginatedOrders = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
+
     return filteredOrders.slice(start, end);
   }, [filteredOrders, currentPage]);
 
@@ -917,6 +987,11 @@ export default function AdminOrdersPage() {
     setCurrentPage(1);
   };
 
+  const applyQuickFilter = (filter: QuickFilter) => {
+    setQuickFilter(filter);
+    setStatusFilter("all");
+  };
+
   const applyDatePreset = (preset: "today" | "last7" | "last30") => {
     const today = getTodayDateInput();
 
@@ -942,6 +1017,8 @@ export default function AdminOrdersPage() {
     setSuccessMsg("");
 
     try {
+      const confirmedAt = new Date().toISOString();
+
       const payload: {
         status: OrderStatus;
         confirmed_at?: string | null;
@@ -950,7 +1027,7 @@ export default function AdminOrdersPage() {
       };
 
       if (nextStatus === "paid") {
-        payload.confirmed_at = new Date().toISOString();
+        payload.confirmed_at = confirmedAt;
       }
 
       const { error } = await supabase
@@ -969,9 +1046,7 @@ export default function AdminOrdersPage() {
                 ...order,
                 status: nextStatus,
                 confirmed_at:
-                  nextStatus === "paid"
-                    ? new Date().toISOString()
-                    : order.confirmed_at,
+                  nextStatus === "paid" ? confirmedAt : order.confirmed_at,
               }
             : order
         )
@@ -980,6 +1055,7 @@ export default function AdminOrdersPage() {
       setSuccessMsg("Estado actualizado correctamente.");
     } catch (error) {
       console.error("AdminOrdersPage update status error:", error);
+
       setErrorMsg(
         error instanceof Error
           ? error.message
@@ -1087,6 +1163,7 @@ export default function AdminOrdersPage() {
       setSuccessMsg("Descuento y envío actualizados correctamente.");
     } catch (error) {
       console.error("AdminOrdersPage save adjustments error:", error);
+
       setErrorMsg(
         error instanceof Error
           ? error.message
@@ -1214,19 +1291,19 @@ export default function AdminOrdersPage() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
+          <div className="mokko-container relative z-10 py-7 md:py-14">
             <div className="mx-auto max-w-7xl">
               <AdminPageHeader
                 badge="Admin · Pedidos"
                 title="Gestión de pedidos"
                 description="Revisa pedidos, filtra por ubicación y fechas, actualiza estados, ajusta envío o descuento y exporta resultados."
                 actions={
-                  <>
+                  <div className="grid w-full gap-3 sm:flex sm:w-auto sm:flex-wrap">
                     <button
                       type="button"
                       onClick={exportCsv}
                       disabled={loading || filteredOrders.length === 0}
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     >
                       Exportar CSV
                     </button>
@@ -1235,515 +1312,588 @@ export default function AdminOrdersPage() {
                       type="button"
                       onClick={() => void loadOrders()}
                       disabled={loading}
-                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                     >
                       {loading ? "Actualizando..." : "Recargar pedidos"}
                     </button>
-                  </>
+                  </div>
                 }
               />
-            </div>
 
-            <AdminFlashMessages
-              success={successMsg}
-              error={errorMsg}
-              warning={errorMsg ? "" : warningMsg}
-              className="mx-auto mt-8 max-w-7xl"
-            />
+              <AdminFlashMessages
+                success={successMsg}
+                error={errorMsg}
+                warning={errorMsg ? "" : warningMsg}
+                className="mt-6"
+              />
 
-            {loading ? (
-              <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
-                Cargando pedidos...
-              </div>
-            ) : (
-              <>
-                <div className="mx-auto mt-8 grid max-w-7xl gap-4 md:grid-cols-5">
-                  <QuickStatCard
-                    label="Total"
-                    value={totalOrders}
-                    active={quickFilter === "all"}
-                    variant={quickFilter === "all" ? "yellow" : "neutral"}
-                    onClick={() => setQuickFilter("all")}
-                  />
-                  <QuickStatCard
-                    label="Pendientes"
-                    value={pendingOrders}
-                    active={quickFilter === "pending"}
-                    variant="yellow"
-                    onClick={() => setQuickFilter("pending")}
-                  />
-                  <QuickStatCard
-                    label="En proceso"
-                    value={productionOrders}
-                    active={quickFilter === "processing"}
-                    variant="neutral"
-                    onClick={() => setQuickFilter("processing")}
-                  />
-                  <QuickStatCard
-                    label="Entregados"
-                    value={deliveredOrders}
-                    active={quickFilter === "delivered"}
-                    variant="green"
-                    onClick={() => setQuickFilter("delivered")}
-                  />
-                  <QuickStatCard
-                    label="Cancelados"
-                    value={cancelledOrders}
-                    active={quickFilter === "cancelled"}
-                    variant="danger"
-                    onClick={() => setQuickFilter("cancelled")}
-                  />
+              {loading ? (
+                <div className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
+                  Cargando pedidos...
                 </div>
+              ) : (
+                <>
+                  <section className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+                    <QuickStatCard
+                      label="Total"
+                      value={totalOrders}
+                      active={quickFilter === "all"}
+                      variant={quickFilter === "all" ? "yellow" : "neutral"}
+                      onClick={() => applyQuickFilter("all")}
+                    />
 
-                <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                  <div className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr_0.7fr_0.7fr_0.7fr_0.7fr]">
-                    <div className="xl:col-span-2">
-                      <label className="mb-2 block text-sm text-white/80">
-                        Buscar pedido o cliente
-                      </label>
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="MK-000123, cliente, correo, teléfono, dirección..."
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50"
-                      />
+                    <QuickStatCard
+                      label="Pendientes"
+                      value={pendingOrders}
+                      active={quickFilter === "pending"}
+                      variant="yellow"
+                      onClick={() => applyQuickFilter("pending")}
+                    />
+
+                    <QuickStatCard
+                      label="En proceso"
+                      value={productionOrders}
+                      active={quickFilter === "processing"}
+                      variant="neutral"
+                      onClick={() => applyQuickFilter("processing")}
+                    />
+
+                    <QuickStatCard
+                      label="Entregados"
+                      value={deliveredOrders}
+                      active={quickFilter === "delivered"}
+                      variant="green"
+                      onClick={() => applyQuickFilter("delivered")}
+                    />
+
+                    <QuickStatCard
+                      label="Cancelados"
+                      value={cancelledOrders}
+                      active={quickFilter === "cancelled"}
+                      variant="danger"
+                      onClick={() => applyQuickFilter("cancelled")}
+                    />
+                  </section>
+
+                  <section className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <h2 className="text-2xl font-semibold">Filtros</h2>
+                        <p className="mt-2 text-sm leading-7 text-white/60">
+                          Busca por pedido, cliente, contacto, ubicación o
+                          detalle de placas.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto"
+                      >
+                        Limpiar filtros
+                      </button>
                     </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Estado
-                      </label>
-                      <CustomSelect
-                        value={statusFilter}
-                        onChange={(nextValue) =>
-                          setStatusFilter(nextValue as "all" | OrderStatus)
-                        }
-                        options={statusOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
+                    <div className="mt-5 grid gap-4 xl:grid-cols-[1.35fr_0.75fr_0.75fr_0.75fr_0.75fr_0.75fr]">
+                      <div className="xl:col-span-2">
+                        <label className="mb-2 block text-sm text-white/80">
+                          Buscar pedido o cliente
+                        </label>
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="MK-000123, cliente, correo, teléfono, dirección..."
+                          className={inputClass}
+                        />
+                      </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        País
-                      </label>
-                      <CustomSelect
-                        value={countryFilter}
-                        onChange={(nextValue) => {
-                          setCountryFilter(nextValue);
-                          setLevel1Filter("");
-                          setLevel2Filter("");
-                          setLevel3Filter("");
-                        }}
-                        options={countryOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Estado
+                        </label>
+                        <CustomSelect
+                          value={statusFilter}
+                          onChange={(nextValue) =>
+                            setStatusFilter(nextValue as "all" | OrderStatus)
+                          }
+                          options={statusOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Departamento / región
-                      </label>
-                      <CustomSelect
-                        value={level1Filter}
-                        onChange={(nextValue) => {
-                          setLevel1Filter(nextValue);
-                          setLevel2Filter("");
-                          setLevel3Filter("");
-                        }}
-                        options={level1Options}
-                        placeholder="Todos"
-                        disabled={!countryFilter && level1Options.length === 0}
-                      />
-                    </div>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          País
+                        </label>
+                        <CustomSelect
+                          value={countryFilter}
+                          onChange={(nextValue) => {
+                            setCountryFilter(nextValue);
+                            setLevel1Filter("");
+                            setLevel2Filter("");
+                            setLevel3Filter("");
+                          }}
+                          options={countryOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Provincia / ciudad
-                      </label>
-                      <CustomSelect
-                        value={level2Filter}
-                        onChange={(nextValue) => {
-                          setLevel2Filter(nextValue);
-                          setLevel3Filter("");
-                        }}
-                        options={level2Options}
-                        placeholder="Todos"
-                        disabled={!level1Filter && level2Options.length === 0}
-                      />
-                    </div>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Departamento / región
+                        </label>
+                        <CustomSelect
+                          value={level1Filter}
+                          onChange={(nextValue) => {
+                            setLevel1Filter(nextValue);
+                            setLevel2Filter("");
+                            setLevel3Filter("");
+                          }}
+                          options={level1Options}
+                          placeholder="Todos"
+                          disabled={!countryFilter && level1Options.length === 0}
+                        />
+                      </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Distrito
-                      </label>
-                      <CustomSelect
-                        value={level3Filter}
-                        onChange={(nextValue) => setLevel3Filter(nextValue)}
-                        options={level3Options}
-                        placeholder="Todos"
-                        disabled={!level2Filter && level3Options.length === 0}
-                      />
-                    </div>
-                  </div>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Provincia / ciudad
+                        </label>
+                        <CustomSelect
+                          value={level2Filter}
+                          onChange={(nextValue) => {
+                            setLevel2Filter(nextValue);
+                            setLevel3Filter("");
+                          }}
+                          options={level2Options}
+                          placeholder="Todos"
+                          disabled={!level1Filter && level2Options.length === 0}
+                        />
+                      </div>
 
-                  <div className="mt-4 grid gap-4 xl:grid-cols-[0.8fr_0.9fr_0.9fr_1.4fr]">
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Campo de fecha
-                      </label>
-                      <CustomSelect
-                        value={dateField}
-                        onChange={(nextValue) =>
-                          setDateField(nextValue as DateFilterField)
-                        }
-                        options={dateFieldOptions}
-                        placeholder="Fecha de creación"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Fecha desde
-                      </label>
-                      <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition focus:border-[#E8C547]/50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Fecha hasta
-                      </label>
-                      <input
-                        type="date"
-                        value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition focus:border-[#E8C547]/50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Rangos rápidos
-                      </label>
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          onClick={() => applyDatePreset("today")}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                        >
-                          Hoy
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => applyDatePreset("last7")}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                        >
-                          7 días
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => applyDatePreset("last30")}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                        >
-                          30 días
-                        </button>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Distrito
+                        </label>
+                        <CustomSelect
+                          value={level3Filter}
+                          onChange={(nextValue) => setLevel3Filter(nextValue)}
+                          options={level3Options}
+                          placeholder="Todos"
+                          disabled={!level2Filter && level3Options.length === 0}
+                        />
                       </div>
                     </div>
-                  </div>
 
-                  {hasInvalidDateRange && (
-                    <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                      La fecha “desde” no puede ser mayor que la fecha “hasta”.
-                    </div>
-                  )}
-
-                  {dateField === "confirmed_at" && (dateFrom || dateTo) && (
-                    <div className="mt-4 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                      Estás filtrando por <strong>{getDateFieldLabel(dateField)}</strong>.
-                      Los pedidos aún no confirmados no aparecerán en este rango.
-                    </div>
-                  )}
-
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm text-white/50">
-                      Mostrando {filteredOrders.length} pedido
-                      {filteredOrders.length === 1 ? "" : "s"}.
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={clearFilters}
-                      className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                    >
-                      Limpiar filtros
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mx-auto mt-8 grid max-w-7xl gap-5">
-                  {filteredOrders.length === 0 ? (
-                    <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
-                      <div className="text-2xl font-semibold">
-                        No se encontraron pedidos
+                    <div className="mt-4 grid gap-4 xl:grid-cols-[0.8fr_0.9fr_0.9fr_1.4fr]">
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Campo de fecha
+                        </label>
+                        <CustomSelect
+                          value={dateField}
+                          onChange={(nextValue) =>
+                            setDateField(nextValue as DateFilterField)
+                          }
+                          options={dateFieldOptions}
+                          placeholder="Fecha de creación"
+                        />
                       </div>
-                      <p className="mt-3 text-sm leading-7 text-white/65">
-                        Ajusta la búsqueda o los filtros para ver otros resultados.
-                      </p>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Fecha desde
+                        </label>
+                        <input
+                          type="date"
+                          value={dateFrom}
+                          onChange={(e) => setDateFrom(e.target.value)}
+                          className={dateInputClass}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Fecha hasta
+                        </label>
+                        <input
+                          type="date"
+                          value={dateTo}
+                          onChange={(e) => setDateTo(e.target.value)}
+                          className={dateInputClass}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Rangos rápidos
+                        </label>
+                        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+                          <button
+                            type="button"
+                            onClick={() => applyDatePreset("today")}
+                            className="rounded-2xl border border-white/10 px-3 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:px-4"
+                          >
+                            Hoy
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => applyDatePreset("last7")}
+                            className="rounded-2xl border border-white/10 px-3 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:px-4"
+                          >
+                            7 días
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => applyDatePreset("last30")}
+                            className="rounded-2xl border border-white/10 px-3 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:px-4"
+                          >
+                            30 días
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    paginatedOrders.map((order) => {
-                      const orderStatusOptions: CustomSelectOption[] =
-                        STATUS_OPTIONS.map((status) => ({
-                          value: status,
-                          label: getStatusLabel(status),
-                        }));
 
-                      const draft = adjustmentsByOrder[order.id] ?? {
-                        discount_amount: formatMoneyInput(order.discount_amount),
-                        shipping_amount: formatMoneyInput(order.shipping_amount),
-                      };
+                    {hasInvalidDateRange && (
+                      <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                        La fecha “desde” no puede ser mayor que la fecha “hasta”.
+                      </div>
+                    )}
 
-                      const draftDiscount = parseMoney(draft.discount_amount);
-                      const draftShipping = parseMoney(draft.shipping_amount);
+                    {dateField === "confirmed_at" && (dateFrom || dateTo) && (
+                      <div className="mt-4 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
+                        Estás filtrando por{" "}
+                        <strong>{getDateFieldLabel(dateField)}</strong>. Los
+                        pedidos aún no confirmados no aparecerán en este rango.
+                      </div>
+                    )}
 
-                      const recalculatedTotal =
-                        !Number.isNaN(draftDiscount) &&
-                        !Number.isNaN(draftShipping)
-                          ? calculateFinalTotal(
-                              Number(order.subtotal || 0),
-                              draftDiscount,
-                              draftShipping
-                            )
-                          : Number(order.total || 0);
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-[#141410] px-4 py-3 text-sm text-white/60">
+                      Mostrando{" "}
+                      <span className="font-semibold text-white">
+                        {filteredOrders.length}
+                      </span>{" "}
+                      pedido{filteredOrders.length === 1 ? "" : "s"}.
+                    </div>
+                  </section>
 
-                      return (
-                        <div
-                          key={order.id}
-                          className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm"
-                        >
-                          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-                            <div>
-                              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-3">
-                                    <h2 className="text-2xl font-semibold">
-                                      {order.order_number}
-                                    </h2>
+                  <section className="mt-8 grid gap-5">
+                    {filteredOrders.length === 0 ? (
+                      <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
+                        <div className="text-2xl font-semibold">
+                          No se encontraron pedidos
+                        </div>
+                        <p className="mt-3 text-sm leading-7 text-white/65">
+                          Ajusta la búsqueda o los filtros para ver otros
+                          resultados.
+                        </p>
+                      </div>
+                    ) : (
+                      paginatedOrders.map((order) => {
+                        const orderStatusOptions: CustomSelectOption[] =
+                          STATUS_OPTIONS.map((status) => ({
+                            value: status,
+                            label: getStatusLabel(status),
+                          }));
 
-                                    <span
-                                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getStatusClass(
-                                        order.status
-                                      )}`}
-                                    >
-                                      {getStatusLabel(order.status)}
-                                    </span>
-                                  </div>
+                        const draft = adjustmentsByOrder[order.id] ?? {
+                          discount_amount: formatMoneyInput(
+                            order.discount_amount
+                          ),
+                          shipping_amount: formatMoneyInput(
+                            order.shipping_amount
+                          ),
+                        };
 
-                                  <div className="mt-3 flex flex-wrap gap-4 text-sm text-white/55">
-                                    <span>Fecha: {formatDateTime(order.created_at)}</span>
-                                    <span>Canal: {formatChannelLabel(order.sales_channel)}</span>
-                                    <span>Cliente: {order.display_name}</span>
-                                    <span>Tel: {order.display_phone}</span>
-                                  </div>
+                        const draftDiscount = parseMoney(draft.discount_amount);
+                        const draftShipping = parseMoney(draft.shipping_amount);
 
-                                  <div className="mt-2 text-sm text-white/55">
-                                    Ubicación: {order.location_label}
+                        const recalculatedTotal =
+                          !Number.isNaN(draftDiscount) &&
+                          !Number.isNaN(draftShipping)
+                            ? calculateFinalTotal(
+                                Number(order.subtotal || 0),
+                                draftDiscount,
+                                draftShipping
+                              )
+                            : Number(order.total || 0);
+
+                        const whatsappUrl = getWhatsAppUrl(
+                          order.display_whatsapp || order.display_phone,
+                          order.order_number
+                        );
+
+                        const callUrl = getPhoneCallUrl(
+                          order.display_phone || order.display_whatsapp
+                        );
+
+                        return (
+                          <article
+                            key={order.id}
+                            className="rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6"
+                          >
+                            <div className="grid gap-6 xl:grid-cols-[1.22fr_0.78fr]">
+                              <div className="min-w-0">
+                                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      <h2 className="break-all text-2xl font-semibold">
+                                        {order.order_number}
+                                      </h2>
+
+                                      <span
+                                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getStatusClass(
+                                          order.status
+                                        )}`}
+                                      >
+                                        {getStatusLabel(order.status)}
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-3 grid gap-2 text-sm text-white/58 sm:grid-cols-2 xl:grid-cols-4">
+                                      <SmallInfo
+                                        label="Fecha"
+                                        value={formatDateTime(order.created_at)}
+                                      />
+                                      <SmallInfo
+                                        label="Canal"
+                                        value={formatChannelLabel(
+                                          order.sales_channel
+                                        )}
+                                      />
+                                      <SmallInfo
+                                        label="Cliente"
+                                        value={order.display_name}
+                                      />
+                                      <SmallInfo
+                                        label="Teléfono"
+                                        value={order.display_phone}
+                                      />
+                                    </div>
+
+                                    <div className="mt-3 rounded-2xl border border-white/10 bg-[#141410] px-4 py-3 text-sm leading-6 text-white/65">
+                                      <span className="text-white/40">
+                                        Ubicación:
+                                      </span>{" "}
+                                      {order.location_label}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
 
-                              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                                {order.order_items.map((item, index) => {
-                                  const custom = item.customization_data || {};
+                                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                                  {order.order_items.map((item, index) => {
+                                    const custom =
+                                      item.customization_data || null;
+                                    const colorLabel =
+                                      getColorLabelFromData(custom);
+                                    const shapeLabel =
+                                      getShapeLabelFromData(custom);
+                                    const sizeLabel = getSizeLabelFromData(custom);
 
-                                  return (
-                                    <div
-                                      key={item.id}
-                                      className="rounded-[24px] border border-white/10 bg-[#141410] p-5"
-                                    >
-                                      <div className="flex items-center justify-between gap-3">
-                                        <div className="text-base font-semibold">
-                                          Placa {index + 1}
-                                        </div>
-
-                                        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                                          {getPlanLabel(item.sold_plan_type)}
-                                        </div>
-                                      </div>
-
-                                      <div className="mt-4 grid gap-2 text-sm text-white/70">
-                                        {item.sold_plan_type === "custom" &&
-                                          custom.pet_name && (
-                                            <div>
-                                              <span className="text-white/45">
-                                                Nombre:
-                                              </span>{" "}
-                                              {String(custom.pet_name)}
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className="rounded-[24px] border border-white/10 bg-[#141410] p-5"
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div>
+                                            <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                                              Placa {index + 1}
                                             </div>
+
+                                            <div className="mt-2 text-base font-semibold">
+                                              {getPlanLabel(
+                                                item.sold_plan_type
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                                            Cant. {Number(item.quantity || 0)}
+                                          </div>
+                                        </div>
+
+                                        <div className="mt-4 grid gap-2 text-sm leading-6 text-white/70">
+                                          {item.sold_plan_type === "custom" &&
+                                            custom?.pet_name && (
+                                              <SmallLine
+                                                label="Nombre"
+                                                value={String(custom.pet_name)}
+                                              />
+                                            )}
+
+                                          {colorLabel && (
+                                            <SmallLine
+                                              label="Color"
+                                              value={colorLabel}
+                                            />
                                           )}
 
-                                        {custom.color && (
-                                          <div>
-                                            <span className="text-white/45">
-                                              Color:
-                                            </span>{" "}
-                                            {formatColorLabel(custom.color)}
-                                          </div>
-                                        )}
+                                          {shapeLabel && (
+                                            <SmallLine
+                                              label="Forma"
+                                              value={shapeLabel}
+                                            />
+                                          )}
 
-                                        {custom.shape && (
-                                          <div>
-                                            <span className="text-white/45">
-                                              Forma:
-                                            </span>{" "}
-                                            {formatShapeLabel(custom.shape)}
-                                          </div>
-                                        )}
+                                          {sizeLabel && (
+                                            <SmallLine
+                                              label="Tamaño"
+                                              value={sizeLabel}
+                                            />
+                                          )}
 
-                                        {custom.size && (
-                                          <div>
-                                            <span className="text-white/45">
-                                              Tamaño:
-                                            </span>{" "}
-                                            {String(custom.size)}
-                                          </div>
-                                        )}
+                                          <SmallLine
+                                            label="Precio"
+                                            value={formatMoney(
+                                              item.unit_price,
+                                              order.currency
+                                            )}
+                                          />
 
-                                        <div>
-                                          <span className="text-white/45">
-                                            Precio:
-                                          </span>{" "}
-                                          S/ {Number(item.unit_price || 0).toFixed(2)}
+                                          <SmallLine
+                                            label="Subtotal"
+                                            value={formatMoney(
+                                              item.subtotal,
+                                              order.currency
+                                            )}
+                                          />
                                         </div>
                                       </div>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  })}
+                                </div>
+
+                                {order.notes && (
+                                  <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/70">
+                                    {order.notes}
+                                  </div>
+                                )}
+
+                                {expandedOrderId === order.id && (
+                                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                    <InfoBox
+                                      label="Correo"
+                                      value={order.display_email}
+                                    />
+                                    <InfoBox
+                                      label="WhatsApp"
+                                      value={order.display_whatsapp}
+                                    />
+                                    <InfoBox
+                                      label="País"
+                                      value={
+                                        order.country_name || "No registrado"
+                                      }
+                                    />
+                                    <InfoBox
+                                      label="Departamento / región"
+                                      value={
+                                        order.division_level_1_name ||
+                                        "No registrado"
+                                      }
+                                    />
+                                    <InfoBox
+                                      label="Provincia / ciudad"
+                                      value={
+                                        order.division_level_2_name ||
+                                        "No registrado"
+                                      }
+                                    />
+                                    <InfoBox
+                                      label="Distrito"
+                                      value={
+                                        order.division_level_3_name ||
+                                        "No registrado"
+                                      }
+                                    />
+                                    <InfoBox
+                                      label="Dirección"
+                                      value={
+                                        order.address_line || "No registrada"
+                                      }
+                                    />
+                                    <InfoBox
+                                      label="Confirmado"
+                                      value={
+                                        order.confirmed_at
+                                          ? formatDateTime(order.confirmed_at)
+                                          : "Aún no confirmado"
+                                      }
+                                    />
+                                  </div>
+                                )}
                               </div>
 
-                              {order.notes && (
-                                <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm text-white/70">
-                                  {order.notes}
-                                </div>
-                              )}
-
-                              {expandedOrderId === order.id && (
-                                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                  <InfoBox label="Correo" value={order.display_email} />
-                                  <InfoBox label="WhatsApp" value={order.display_whatsapp} />
-                                  <InfoBox
-                                    label="País"
-                                    value={order.country_name || "No registrado"}
-                                  />
-                                  <InfoBox
-                                    label="Departamento / región"
-                                    value={
-                                      order.division_level_1_name || "No registrado"
-                                    }
-                                  />
-                                  <InfoBox
-                                    label="Provincia / ciudad"
-                                    value={
-                                      order.division_level_2_name || "No registrado"
-                                    }
-                                  />
-                                  <InfoBox
-                                    label="Distrito"
-                                    value={
-                                      order.division_level_3_name || "No registrado"
-                                    }
-                                  />
-                                  <InfoBox
-                                    label="Dirección"
-                                    value={order.address_line || "No registrada"}
-                                  />
-                                  <InfoBox
-                                    label="Confirmado"
-                                    value={
-                                      order.confirmed_at
-                                        ? formatDateTime(order.confirmed_at)
-                                        : "Aún no confirmado"
-                                    }
-                                  />
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <div className="rounded-[24px] border border-white/10 bg-[#141410] p-5">
+                              <aside className="rounded-[24px] border border-white/10 bg-[#141410] p-5">
                                 <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
                                   Total actual
                                 </div>
+
                                 <div className="mt-2 text-2xl font-semibold text-[#E8C547]">
-                                  S/ {Number(order.total || 0).toFixed(2)}
+                                  {formatMoney(order.total, order.currency)}
                                 </div>
 
                                 <div className="mt-5 grid gap-3">
                                   <SummaryMiniBox
                                     label="Subtotal"
-                                    value={`S/ ${Number(order.subtotal || 0).toFixed(2)}`}
+                                    value={formatMoney(
+                                      order.subtotal,
+                                      order.currency
+                                    )}
                                   />
 
-                                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                    <label className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                                      Descuento
-                                    </label>
-                                    <input
-                                      type="text"
-                                      inputMode="decimal"
-                                      value={draft.discount_amount}
-                                      onChange={(event) =>
-                                        handleAdjustmentInputChange(
-                                          order.id,
-                                          "discount_amount",
-                                          event.target.value
-                                        )
-                                      }
-                                      disabled={savingAdjustmentsOrderId === order.id}
-                                      placeholder="0.00"
-                                      className="mt-2 w-full rounded-xl border border-white/10 bg-[#141410] px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 disabled:opacity-60"
-                                    />
-                                  </div>
+                                  <MoneyInputBox
+                                    label="Descuento"
+                                    value={draft.discount_amount}
+                                    disabled={
+                                      savingAdjustmentsOrderId === order.id
+                                    }
+                                    onChange={(value) =>
+                                      handleAdjustmentInputChange(
+                                        order.id,
+                                        "discount_amount",
+                                        value
+                                      )
+                                    }
+                                  />
 
-                                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                    <label className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                                      Envío
-                                    </label>
-                                    <input
-                                      type="text"
-                                      inputMode="decimal"
-                                      value={draft.shipping_amount}
-                                      onChange={(event) =>
-                                        handleAdjustmentInputChange(
-                                          order.id,
-                                          "shipping_amount",
-                                          event.target.value
-                                        )
-                                      }
-                                      disabled={savingAdjustmentsOrderId === order.id}
-                                      placeholder="0.00"
-                                      className="mt-2 w-full rounded-xl border border-white/10 bg-[#141410] px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 disabled:opacity-60"
-                                    />
-                                  </div>
+                                  <MoneyInputBox
+                                    label="Envío"
+                                    value={draft.shipping_amount}
+                                    disabled={
+                                      savingAdjustmentsOrderId === order.id
+                                    }
+                                    onChange={(value) =>
+                                      handleAdjustmentInputChange(
+                                        order.id,
+                                        "shipping_amount",
+                                        value
+                                      )
+                                    }
+                                  />
 
                                   <SummaryMiniBox
                                     label="Total recalculado"
-                                    value={`S/ ${Number(recalculatedTotal || 0).toFixed(2)}`}
+                                    value={formatMoney(
+                                      recalculatedTotal,
+                                      order.currency
+                                    )}
+                                    highlight
                                   />
                                 </div>
 
                                 <button
                                   type="button"
-                                  onClick={() => void handleSaveAdjustments(order)}
-                                  disabled={savingAdjustmentsOrderId === order.id}
+                                  onClick={() =>
+                                    void handleSaveAdjustments(order)
+                                  }
+                                  disabled={
+                                    savingAdjustmentsOrderId === order.id
+                                  }
                                   className="mt-5 w-full rounded-2xl bg-[#E8C547] px-4 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
                                 >
                                   {savingAdjustmentsOrderId === order.id
@@ -1770,6 +1920,26 @@ export default function AdminOrdersPage() {
                                 </div>
 
                                 <div className="mt-5 grid gap-3">
+                                  {whatsappUrl && (
+                                    <a
+                                      href={whatsappUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-[#2D5A27]/30 bg-[#2D5A27]/15 px-4 py-3 text-sm font-medium text-green-100 transition hover:bg-[#2D5A27]/20"
+                                    >
+                                      Escribir por WhatsApp
+                                    </a>
+                                  )}
+
+                                  {callUrl && (
+                                    <a
+                                      href={callUrl}
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                    >
+                                      Llamar cliente
+                                    </a>
+                                  )}
+
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1784,120 +1954,28 @@ export default function AdminOrdersPage() {
                                       : "Ver más"}
                                   </button>
                                 </div>
-                              </div>
+                              </aside>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })
+                          </article>
+                        );
+                      })
+                    )}
+                  </section>
+
+                  {filteredOrders.length > 0 && (
+                    <PaginationPanel
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      pageInput={pageInput}
+                      paginationItems={paginationItems}
+                      setCurrentPage={setCurrentPage}
+                      setPageInput={setPageInput}
+                      goToPage={goToPage}
+                    />
                   )}
-                </div>
-
-                {filteredOrders.length > 0 && (
-                  <div className="mx-auto mt-6 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="text-sm text-white/55">
-                        Página {currentPage} de {totalPages}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCurrentPage(1)}
-                          disabled={currentPage === 1}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Primera
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentPage((prev) => Math.max(1, prev - 1))
-                          }
-                          disabled={currentPage === 1}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Anterior
-                        </button>
-
-                        {paginationItems.map((item, index) =>
-                          item === "ellipsis" ? (
-                            <span
-                              key={`ellipsis-${index}`}
-                              className="px-2 text-sm text-white/45"
-                            >
-                              ...
-                            </span>
-                          ) : (
-                            <button
-                              key={item}
-                              type="button"
-                              onClick={() => setCurrentPage(item)}
-                              className={`min-w-[44px] rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                                currentPage === item
-                                  ? "bg-[#E8C547] text-[#1A1A14] shadow-lg shadow-[#E8C547]/20"
-                                  : "border border-white/10 text-white/85 hover:bg-white/5"
-                              }`}
-                            >
-                              {item}
-                            </button>
-                          )
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                          }
-                          disabled={currentPage === totalPages}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Siguiente
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setCurrentPage(totalPages)}
-                          disabled={currentPage === totalPages}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Última
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 border-t border-white/10 pt-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <label className="text-sm text-white/60">Ir a página</label>
-
-                        <input
-                          type="number"
-                          min={1}
-                          max={totalPages}
-                          value={pageInput}
-                          onChange={(e) => setPageInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              goToPage();
-                            }
-                          }}
-                          className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 sm:w-28"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={goToPage}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                        >
-                          Ir
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </section>
       </main>
@@ -1926,44 +2004,60 @@ function QuickStatCard({
         ? "border-[#E8C547]/25 bg-[#E8C547]/10"
         : "border-[#E8C547]/15 bg-[#E8C547]/8"
       : variant === "green"
-      ? active
-        ? "border-[#2D5A27]/70 bg-[#12311c]"
-        : "border-[#2D5A27]/60 bg-[#12311c]"
-      : variant === "danger"
-      ? active
-        ? "border-red-400/30 bg-red-400/10"
-        : "border-white/8 bg-white/[0.04]"
-      : active
-      ? "border-[#E8C547]/20 bg-[#E8C547]/8"
-      : "border-white/8 bg-white/[0.04]";
+        ? active
+          ? "border-[#2D5A27]/70 bg-[#12311c]"
+          : "border-[#2D5A27]/60 bg-[#12311c]"
+        : variant === "danger"
+          ? active
+            ? "border-red-400/30 bg-red-400/10"
+            : "border-white/8 bg-white/[0.04]"
+          : active
+            ? "border-[#E8C547]/20 bg-[#E8C547]/8"
+            : "border-white/8 bg-white/[0.04]";
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-[28px] border p-6 text-left transition hover:-translate-y-[1px] ${variantClass}`}
+      className={`rounded-[24px] border p-4 text-left transition hover:-translate-y-[1px] sm:rounded-[28px] sm:p-6 ${variantClass}`}
     >
-      <div className="text-sm uppercase tracking-[0.14em] text-white/45">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45 sm:text-sm">
         {label}
       </div>
-      <div className="mt-3 text-4xl font-semibold text-[#E8C547]">{value}</div>
+      <div className="mt-3 text-3xl font-semibold text-[#E8C547] sm:text-4xl">
+        {value}
+      </div>
     </button>
   );
 }
 
-function InfoBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function SmallInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-white/35">{label}:</span>{" "}
+      <span className="text-white/70">{value}</span>
+    </div>
+  );
+}
+
+function SmallLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-white/45">{label}:</span>{" "}
+      <span className="text-white/78">{value}</span>
+    </div>
+  );
+}
+
+function InfoBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
       <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
-      <div className="mt-2 text-sm leading-6 text-white/80">{value}</div>
+      <div className="mt-2 break-words text-sm leading-6 text-white/80">
+        {value}
+      </div>
     </div>
   );
 }
@@ -1971,16 +2065,182 @@ function InfoBox({
 function SummaryMiniBox({
   label,
   value,
+  highlight = false,
 }: {
   label: string;
   value: string;
+  highlight?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div
+      className={`rounded-2xl border p-4 ${
+        highlight
+          ? "border-[#E8C547]/20 bg-[#E8C547]/10"
+          : "border-white/10 bg-white/5"
+      }`}
+    >
       <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
-      <div className="mt-2 text-sm font-medium text-white/85">{value}</div>
+      <div
+        className={`mt-2 text-sm font-medium ${
+          highlight ? "text-[#E8C547]" : "text-white/85"
+        }`}
+      >
+        {value}
+      </div>
     </div>
+  );
+}
+
+function MoneyInputBox({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <label className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+        {label}
+      </label>
+
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        placeholder="0.00"
+        className="mt-2 w-full rounded-xl border border-white/10 bg-[#141410] px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 disabled:opacity-60"
+      />
+    </div>
+  );
+}
+
+function PaginationPanel({
+  currentPage,
+  totalPages,
+  pageInput,
+  paginationItems,
+  setCurrentPage,
+  setPageInput,
+  goToPage,
+}: {
+  currentPage: number;
+  totalPages: number;
+  pageInput: string;
+  paginationItems: Array<number | "ellipsis">;
+  setCurrentPage: React.Dispatch<React.SetStateAction<number>>;
+  setPageInput: React.Dispatch<React.SetStateAction<string>>;
+  goToPage: () => void;
+}) {
+  return (
+    <section className="mt-6 rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="text-sm text-white/55">
+          Página {currentPage} de {totalPages}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Primera
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Anterior
+          </button>
+
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">
+            {paginationItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="px-2 text-sm text-white/45"
+                >
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setCurrentPage(item)}
+                  className={`min-w-[44px] rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                    currentPage === item
+                      ? "bg-[#E8C547] text-[#1A1A14] shadow-lg shadow-[#E8C547]/20"
+                      : "border border-white/10 text-white/85 hover:bg-white/5"
+                  }`}
+                >
+                  {item}
+                </button>
+              )
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+            }
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Última
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="grid gap-3 sm:flex sm:items-center">
+          <label className="text-sm text-white/60">Ir a página</label>
+
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                goToPage();
+              }
+            }}
+            className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 sm:w-28"
+          />
+
+          <button
+            type="button"
+            onClick={goToPage}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Ir
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }

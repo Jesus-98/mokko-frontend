@@ -10,8 +10,20 @@ const labelClass = "mb-2 block text-sm text-white/80";
 const baseControlClass =
   "w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 disabled:cursor-not-allowed disabled:opacity-60 read-only:text-white/70";
 
+const darkDateClass = "[color-scheme:dark]";
+
 function joinClasses(...classes: Array<string | undefined | false>) {
   return classes.filter(Boolean).join(" ");
+}
+
+function shouldUseDarkDateScheme(type?: InputHTMLAttributes<HTMLInputElement>["type"]) {
+  return (
+    type === "date" ||
+    type === "time" ||
+    type === "datetime-local" ||
+    type === "month" ||
+    type === "week"
+  );
 }
 
 export function FieldLabel({ children }: { children: ReactNode }) {
@@ -20,12 +32,31 @@ export function FieldLabel({ children }: { children: ReactNode }) {
 
 export function TextInput({
   className,
+  type,
   ...props
 }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={joinClasses(baseControlClass, className)}
+      type={type}
+      className={joinClasses(
+        baseControlClass,
+        shouldUseDarkDateScheme(type) && darkDateClass,
+        className
+      )}
+    />
+  );
+}
+
+export function DateInput({
+  className,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  return (
+    <input
+      {...props}
+      type="date"
+      className={joinClasses(baseControlClass, darkDateClass, className)}
     />
   );
 }

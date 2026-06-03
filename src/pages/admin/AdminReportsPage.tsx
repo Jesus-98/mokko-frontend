@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import { supabase } from "../../lib/supabase";
@@ -11,6 +19,8 @@ import AdminFlashMessages from "../../components/admin/AdminFlashMessages";
 import AdminAccessDenied from "../../components/admin/AdminAccessDenied";
 
 type ReportStatus = "new" | "viewed" | "resolved" | "dismissed";
+type ReportSource = "qr" | "nfc" | "manual" | "unknown";
+
 type QuickFilter =
   | "all"
   | "new"
@@ -18,8 +28,31 @@ type QuickFilter =
   | "resolved"
   | "dismissed"
   | "with_location";
+
 type PresenceFilter = "all" | "with_value" | "without_value";
 type LinkFilter = "all" | "with_pet" | "only_tag";
+
+type RelationValue<T> = T | T[] | null;
+
+type ReportOwnerProfileRow = {
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp_phone: string | null;
+};
+
+type ReportPetRow = {
+  id: string;
+  name: string;
+  photo_url: string | null;
+  owner_user_id: string | null;
+  owner_profile: RelationValue<ReportOwnerProfileRow>;
+};
+
+type ReportTagRow = {
+  id: string;
+  code: string;
+};
 
 type ReportRow = {
   id: string;
@@ -28,19 +61,16 @@ type ReportRow = {
   reporter_phone: string | null;
   note: string | null;
   location_text: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  source: ReportSource | null;
   created_at: string;
   viewed_at: string | null;
   resolved_at: string | null;
   pet_id: string | null;
   tag_id: string;
-  pets: {
-    id: string;
-    name: string;
-  }[] | null;
-  tags: {
-    id: string;
-    code: string;
-  }[] | null;
+  pets: RelationValue<ReportPetRow>;
+  tags: RelationValue<ReportTagRow>;
 };
 
 const STATUS_OPTIONS: ReportStatus[] = [
@@ -51,6 +81,11 @@ const STATUS_OPTIONS: ReportStatus[] = [
 ];
 
 const ITEMS_PER_PAGE = 10;
+
+const inputClass =
+  "w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 disabled:cursor-not-allowed disabled:opacity-60";
+
+const dateInputClass = `${inputClass} [color-scheme:dark]`;
 
 function getStatusLabel(status: ReportStatus) {
   switch (status) {
@@ -70,9 +105,9 @@ function getStatusLabel(status: ReportStatus) {
 function getStatusClass(status: ReportStatus) {
   switch (status) {
     case "new":
-      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#E8C547]";
+      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]";
     case "viewed":
-      return "border-white/10 bg-white/5 text-white/80";
+      return "border-blue-400/20 bg-blue-400/10 text-blue-200";
     case "resolved":
       return "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200";
     case "dismissed":
@@ -82,7 +117,37 @@ function getStatusClass(status: ReportStatus) {
   }
 }
 
-function formatDateTime(value: string) {
+function getSourceLabel(source: ReportSource | null | undefined) {
+  switch (source) {
+    case "qr":
+      return "Escaneo QR";
+    case "nfc":
+      return "Escaneo NFC";
+    case "manual":
+      return "Ingreso manual";
+    case "unknown":
+      return "No identificado";
+    default:
+      return "No identificado";
+  }
+}
+
+function getSourceClass(source: ReportSource | null | undefined) {
+  switch (source) {
+    case "qr":
+      return "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]";
+    case "nfc":
+      return "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200";
+    case "manual":
+      return "border-white/10 bg-white/5 text-white/75";
+    default:
+      return "border-white/10 bg-white/5 text-white/60";
+  }
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "—";
+
   try {
     return new Date(value).toLocaleString("es-PE", {
       year: "numeric",
@@ -100,8 +165,8 @@ function normalizeText(value: string) {
   return value.trim().toLowerCase();
 }
 
-function normalizePhone(phone: string) {
-  return phone.replace(/\D/g, "");
+function normalizePhone(phone: string | null | undefined) {
+  return (phone || "").replace(/\D/g, "");
 }
 
 function csvEscape(value: unknown) {
@@ -109,13 +174,47 @@ function csvEscape(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function firstRelation<T>(value: T[] | null | undefined): T | null {
-  if (!value || value.length === 0) return null;
-  return value[0] ?? null;
+function firstRelation<T>(value: RelationValue<T> | undefined): T | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
+
+function getPetOwnerProfile(pet: ReportPetRow | null) {
+  return firstRelation(pet?.owner_profile);
+}
+
+function getOwnerName(pet: ReportPetRow | null) {
+  const owner = getPetOwnerProfile(pet);
+
+  return (
+    owner?.full_name?.trim() ||
+    owner?.email?.trim() ||
+    "Dueño no disponible"
+  );
+}
+
+function getOwnerPhone(pet: ReportPetRow | null) {
+  const owner = getPetOwnerProfile(pet);
+
+  return owner?.whatsapp_phone?.trim() || owner?.phone?.trim() || "";
+}
+
+function getOwnerEmail(pet: ReportPetRow | null) {
+  const owner = getPetOwnerProfile(pet);
+
+  return owner?.email?.trim() || "";
 }
 
 function hasText(value: string | null | undefined) {
   return !!value?.trim();
+}
+
+function hasLocation(report: ReportRow) {
+  return (
+    hasText(report.location_text) ||
+    (report.location_lat != null && report.location_lng != null)
+  );
 }
 
 function matchesPresenceFilter(
@@ -125,6 +224,13 @@ function matchesPresenceFilter(
   if (filter === "all") return true;
   if (filter === "with_value") return hasText(value);
   if (filter === "without_value") return !hasText(value);
+  return true;
+}
+
+function matchesLocationFilter(report: ReportRow, filter: PresenceFilter) {
+  if (filter === "all") return true;
+  if (filter === "with_value") return hasLocation(report);
+  if (filter === "without_value") return !hasLocation(report);
   return true;
 }
 
@@ -139,7 +245,7 @@ function matchesQuickFilter(report: ReportRow, filter: QuickFilter) {
   if (filter === "all") return true;
 
   if (filter === "with_location") {
-    return hasText(report.location_text);
+    return hasLocation(report);
   }
 
   return report.status === filter;
@@ -196,6 +302,80 @@ function buildPagination(currentPage: number, totalPages: number) {
   return items;
 }
 
+function formatDateInput(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayDateInput() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return formatDateInput(today);
+}
+
+function getRelativeDateInput(daysAgo: number) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+
+  return formatDateInput(date);
+}
+
+function getWhatsAppUrl(phone: string | null | undefined, tagCode?: string) {
+  const digits = normalizePhone(phone);
+  if (!digits) return "";
+
+  const message = encodeURIComponent(
+    tagCode
+      ? `Hola, te escribimos de Mokko por el reporte enviado para la placa ${tagCode}.`
+      : "Hola, te escribimos de Mokko por el reporte que enviaste."
+  );
+
+  return `https://wa.me/${digits}?text=${message}`;
+}
+
+function getOwnerWhatsAppUrl(
+  phone: string | null | undefined,
+  petName?: string,
+  tagCode?: string
+) {
+  const digits = normalizePhone(phone);
+  if (!digits) return "";
+
+  const message = encodeURIComponent(
+    `Hola, te escribimos de Mokko por un reporte recibido${
+      petName ? ` para ${petName}` : ""
+    }${tagCode ? ` con la placa ${tagCode}` : ""}.`
+  );
+
+  return `https://wa.me/${digits}?text=${message}`;
+}
+
+function getPhoneCallUrl(phone: string | null | undefined) {
+  const digits = normalizePhone(phone);
+  if (!digits) return "";
+
+  return `tel:${digits}`;
+}
+
+function getMapsUrl(report: ReportRow) {
+  if (report.location_lat == null || report.location_lng == null) return "";
+
+  return `https://www.google.com/maps?q=${report.location_lat},${report.location_lng}`;
+}
+
+function getPublicProfileUrl(tagCode: string) {
+  return `/p/${encodeURIComponent(tagCode)}`;
+}
+
+async function copyText(value: string) {
+  await navigator.clipboard.writeText(value);
+}
+
 export default function AdminReportsPage() {
   const { role, loading: authLoading } = useAuth();
 
@@ -224,6 +404,7 @@ export default function AdminReportsPage() {
 
     setLoading(true);
     setErrorMsg("");
+    setSuccessMsg("");
 
     try {
       const { data, error } = await supabase
@@ -235,6 +416,9 @@ export default function AdminReportsPage() {
           reporter_phone,
           note,
           location_text,
+          location_lat,
+          location_lng,
+          source,
           created_at,
           viewed_at,
           resolved_at,
@@ -242,7 +426,15 @@ export default function AdminReportsPage() {
           tag_id,
           pets (
             id,
-            name
+            name,
+            photo_url,
+            owner_user_id,
+            owner_profile:profiles!pets_owner_user_id_fkey (
+              full_name,
+              email,
+              phone,
+              whatsapp_phone
+            )
           ),
           tags (
             id,
@@ -271,6 +463,7 @@ export default function AdminReportsPage() {
   useEffect(() => {
     if (authLoading) return;
     if (role !== "admin") return;
+
     void loadReports();
   }, [authLoading, role, loadReports]);
 
@@ -297,7 +490,7 @@ export default function AdminReportsPage() {
   );
 
   const reportsWithLocation = useMemo(
-    () => reports.filter((report) => hasText(report.location_text)).length,
+    () => reports.filter((report) => hasLocation(report)).length,
     [reports]
   );
 
@@ -335,12 +528,21 @@ export default function AdminReportsPage() {
     []
   );
 
+  const hasInvalidDateRange = useMemo(() => {
+    return Boolean(dateFrom && dateTo && dateFrom > dateTo);
+  }, [dateFrom, dateTo]);
+
   const filteredReports = useMemo(() => {
+    if (hasInvalidDateRange) return [];
+
     const term = normalizeText(searchTerm);
 
     return reports.filter((report) => {
       const pet = firstRelation(report.pets);
       const tag = firstRelation(report.tags);
+      const ownerName = getOwnerName(pet);
+      const ownerPhone = getOwnerPhone(pet);
+      const ownerEmail = getOwnerEmail(pet);
 
       const matchesStatus =
         statusFilter === "all" ? true : report.status === statusFilter;
@@ -356,8 +558,14 @@ export default function AdminReportsPage() {
               report.note || "",
               pet?.name || "",
               tag?.code || "",
+              ownerName,
+              ownerPhone,
+              ownerEmail,
               report.id,
               report.tag_id,
+              report.pet_id || "",
+              getSourceLabel(report.source),
+              getStatusLabel(report.status),
             ].join(" ")
           ).includes(term)
         : true;
@@ -368,10 +576,7 @@ export default function AdminReportsPage() {
         dateTo
       );
 
-      const matchesLocation = matchesPresenceFilter(
-        report.location_text,
-        locationFilter
-      );
+      const matchesLocation = matchesLocationFilter(report, locationFilter);
 
       const matchesPhone = matchesPresenceFilter(
         report.reporter_phone,
@@ -400,6 +605,7 @@ export default function AdminReportsPage() {
     locationFilter,
     phoneFilter,
     linkFilter,
+    hasInvalidDateRange,
   ]);
 
   const totalPages = Math.max(
@@ -415,6 +621,7 @@ export default function AdminReportsPage() {
   const paginatedReports = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
+
     return filteredReports.slice(start, end);
   }, [filteredReports, currentPage]);
 
@@ -528,6 +735,25 @@ export default function AdminReportsPage() {
     setCurrentPage(1);
   };
 
+  const applyDatePreset = (preset: "today" | "last7" | "last30") => {
+    const today = getTodayDateInput();
+
+    if (preset === "today") {
+      setDateFrom(today);
+      setDateTo(today);
+      return;
+    }
+
+    if (preset === "last7") {
+      setDateFrom(getRelativeDateInput(6));
+      setDateTo(today);
+      return;
+    }
+
+    setDateFrom(getRelativeDateInput(29));
+    setDateTo(today);
+  };
+
   const exportCsv = () => {
     if (filteredReports.length === 0) {
       setErrorMsg("No hay reportes para exportar con los filtros actuales.");
@@ -536,12 +762,18 @@ export default function AdminReportsPage() {
 
     const headers = [
       "Estado",
+      "Origen",
       "Fecha",
       "Mascota",
       "Código de placa",
+      "Dueño",
+      "Correo dueño",
+      "Teléfono dueño",
       "Reportante",
-      "Teléfono",
+      "Teléfono reportante",
       "Ubicación",
+      "Latitud",
+      "Longitud",
       "Nota",
       "Visto",
       "Resuelto",
@@ -556,12 +788,18 @@ export default function AdminReportsPage() {
 
       return [
         getStatusLabel(report.status),
+        getSourceLabel(report.source),
         formatDateTime(report.created_at),
         pet?.name || "",
         tag?.code || "",
+        getOwnerName(pet),
+        getOwnerEmail(pet),
+        getOwnerPhone(pet),
         report.reporter_name || "",
         report.reporter_phone || "",
         report.location_text || "",
+        report.location_lat ?? "",
+        report.location_lng ?? "",
         report.note || "",
         report.viewed_at ? formatDateTime(report.viewed_at) : "",
         report.resolved_at ? formatDateTime(report.resolved_at) : "",
@@ -628,19 +866,19 @@ export default function AdminReportsPage() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
+          <div className="mokko-container relative z-10 py-7 md:py-14">
             <div className="mx-auto max-w-7xl">
               <AdminPageHeader
                 badge="Admin · Reportes"
                 title="Gestión de reportes"
-                description="Revisa reportes nuevos, reportantes, ubicaciones y cambia el estado de atención desde el panel admin."
+                description="Revisa reportes nuevos, reportantes, ubicación, dueño de la mascota y cambia el estado de atención."
                 actions={
-                  <>
+                  <div className="grid w-full gap-3 sm:flex sm:w-auto sm:flex-wrap">
                     <button
                       type="button"
                       onClick={exportCsv}
                       disabled={loading || filteredReports.length === 0}
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     >
                       Exportar CSV
                     </button>
@@ -649,317 +887,455 @@ export default function AdminReportsPage() {
                       type="button"
                       onClick={() => void loadReports()}
                       disabled={loading}
-                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                     >
                       {loading ? "Actualizando..." : "Recargar reportes"}
                     </button>
-                  </>
+                  </div>
                 }
               />
-            </div>
 
-            <AdminFlashMessages
-              success={successMsg}
-              error={errorMsg}
-              className="mx-auto mt-8 max-w-7xl"
-            />
+              <AdminFlashMessages
+                success={successMsg}
+                error={errorMsg}
+                className="mt-6"
+              />
 
-            {loading ? (
-              <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
-                Cargando reportes...
-              </div>
-            ) : (
-              <>
-                <div className="mx-auto mt-8 grid max-w-7xl gap-4 md:grid-cols-6">
-                  <StatCard
-                    label="Total"
-                    value={totalReports}
-                    active={quickFilter === "all"}
-                    variant={quickFilter === "all" ? "yellow" : "neutral"}
-                    onClick={() => setQuickFilter("all")}
-                  />
-
-                  <StatCard
-                    label="Nuevos"
-                    value={newReports}
-                    active={quickFilter === "new"}
-                    variant="yellow"
-                    onClick={() => setQuickFilter("new")}
-                  />
-
-                  <StatCard
-                    label="Vistos"
-                    value={viewedReports}
-                    active={quickFilter === "viewed"}
-                    variant="neutral"
-                    onClick={() => setQuickFilter("viewed")}
-                  />
-
-                  <StatCard
-                    label="Resueltos"
-                    value={resolvedReports}
-                    active={quickFilter === "resolved"}
-                    variant="green"
-                    onClick={() => setQuickFilter("resolved")}
-                  />
-
-                  <StatCard
-                    label="Descartados"
-                    value={dismissedReports}
-                    active={quickFilter === "dismissed"}
-                    variant="danger"
-                    onClick={() => setQuickFilter("dismissed")}
-                  />
-
-                  <StatCard
-                    label="Con ubicación"
-                    value={reportsWithLocation}
-                    active={quickFilter === "with_location"}
-                    variant="neutral"
-                    onClick={() => setQuickFilter("with_location")}
-                  />
+              {loading ? (
+                <div className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
+                  Cargando reportes...
                 </div>
+              ) : (
+                <>
+                  <section className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-6">
+                    <StatCard
+                      label="Total"
+                      value={totalReports}
+                      active={quickFilter === "all"}
+                      variant={quickFilter === "all" ? "yellow" : "neutral"}
+                      onClick={() => setQuickFilter("all")}
+                    />
 
-                <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                  <div className="grid gap-4 xl:grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr_0.8fr_0.8fr]">
-                    <div className="xl:col-span-2">
-                      <label className="mb-2 block text-sm text-white/80">
-                        Buscar reporte
-                      </label>
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Nombre, teléfono, ubicación, mascota, código..."
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50"
-                      />
-                    </div>
+                    <StatCard
+                      label="Nuevos"
+                      value={newReports}
+                      active={quickFilter === "new"}
+                      variant="yellow"
+                      onClick={() => setQuickFilter("new")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Estado
-                      </label>
-                      <CustomSelect
-                        value={statusFilter}
-                        onChange={(value) =>
-                          setStatusFilter(value as "all" | ReportStatus)
-                        }
-                        options={statusOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
+                    <StatCard
+                      label="Vistos"
+                      value={viewedReports}
+                      active={quickFilter === "viewed"}
+                      variant="neutral"
+                      onClick={() => setQuickFilter("viewed")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Con ubicación
-                      </label>
-                      <CustomSelect
-                        value={locationFilter}
-                        onChange={(value) =>
-                          setLocationFilter(value as PresenceFilter)
-                        }
-                        options={presenceOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
+                    <StatCard
+                      label="Resueltos"
+                      value={resolvedReports}
+                      active={quickFilter === "resolved"}
+                      variant="green"
+                      onClick={() => setQuickFilter("resolved")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Con teléfono
-                      </label>
-                      <CustomSelect
-                        value={phoneFilter}
-                        onChange={(value) =>
-                          setPhoneFilter(value as PresenceFilter)
-                        }
-                        options={presenceOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
+                    <StatCard
+                      label="Descartados"
+                      value={dismissedReports}
+                      active={quickFilter === "dismissed"}
+                      variant="danger"
+                      onClick={() => setQuickFilter("dismissed")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Vinculación
-                      </label>
-                      <CustomSelect
-                        value={linkFilter}
-                        onChange={(value) => setLinkFilter(value as LinkFilter)}
-                        options={linkOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
-                  </div>
+                    <StatCard
+                      label="Con ubicación"
+                      value={reportsWithLocation}
+                      active={quickFilter === "with_location"}
+                      variant="neutral"
+                      onClick={() => setQuickFilter("with_location")}
+                    />
+                  </section>
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Fecha desde
-                      </label>
-                      <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition focus:border-[#E8C547]/50"
-                      />
-                    </div>
+                  <section className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <h2 className="text-2xl font-semibold">Filtros</h2>
+                        <p className="mt-2 text-sm leading-7 text-white/60">
+                          Busca por reportante, dueño, teléfono, ubicación,
+                          mascota, código de placa, nota, origen o estado.
+                        </p>
+                      </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Fecha hasta
-                      </label>
-                      <input
-                        type="date"
-                        value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition focus:border-[#E8C547]/50"
-                      />
-                    </div>
-
-                    <div className="flex items-end">
                       <button
                         type="button"
                         onClick={clearFilters}
-                        className="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 md:w-auto"
+                        className="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto"
                       >
                         Limpiar filtros
                       </button>
                     </div>
-                  </div>
 
-                  <div className="mt-4 text-sm text-white/50">
-                    Mostrando {filteredReports.length} reporte
-                    {filteredReports.length === 1 ? "" : "s"}. Con teléfono:{" "}
-                    {reportsWithPhone}. Con ubicación: {reportsWithLocation}.
-                  </div>
-                </div>
-
-                <div className="mx-auto mt-8 grid max-w-7xl gap-5">
-                  {filteredReports.length === 0 ? (
-                    <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
-                      <div className="text-2xl font-semibold">
-                        No se encontraron reportes
+                    <div className="mt-5 grid gap-4 xl:grid-cols-[1.35fr_0.75fr_0.75fr_0.75fr_0.75fr]">
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Buscar reporte
+                        </label>
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Dueño, teléfono, mascota, placa, ubicación..."
+                          className={inputClass}
+                        />
                       </div>
-                      <p className="mt-3 text-sm leading-7 text-white/65">
-                        Ajusta la búsqueda o los filtros para ver otros
-                        resultados.
-                      </p>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Estado
+                        </label>
+                        <CustomSelect
+                          value={statusFilter}
+                          onChange={(value) =>
+                            setStatusFilter(value as "all" | ReportStatus)
+                          }
+                          options={statusOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Ubicación
+                        </label>
+                        <CustomSelect
+                          value={locationFilter}
+                          onChange={(value) =>
+                            setLocationFilter(value as PresenceFilter)
+                          }
+                          options={presenceOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Teléfono reportante
+                        </label>
+                        <CustomSelect
+                          value={phoneFilter}
+                          onChange={(value) =>
+                            setPhoneFilter(value as PresenceFilter)
+                          }
+                          options={presenceOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Vinculación
+                        </label>
+                        <CustomSelect
+                          value={linkFilter}
+                          onChange={(value) => setLinkFilter(value as LinkFilter)}
+                          options={linkOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
                     </div>
-                  ) : (
-                    paginatedReports.map((report) => {
-                      const pet = firstRelation(report.pets);
-                      const tag = firstRelation(report.tags);
-                      const whatsappUrl = report.reporter_phone
-                        ? `https://wa.me/${normalizePhone(report.reporter_phone)}`
-                        : null;
 
-                      return (
-                        <div
-                          key={report.id}
-                          className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm"
-                        >
-                          <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-3">
-                                <h2 className="text-2xl font-semibold">
-                                  Reporte {tag?.code ? `· ${tag.code}` : ""}
-                                </h2>
+                    <div className="mt-4 grid gap-4 xl:grid-cols-[0.8fr_0.8fr_1.3fr]">
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Fecha desde
+                        </label>
+                        <input
+                          type="date"
+                          value={dateFrom}
+                          onChange={(e) => setDateFrom(e.target.value)}
+                          className={dateInputClass}
+                        />
+                      </div>
 
-                                <span
-                                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${getStatusClass(
-                                    report.status
-                                  )}`}
-                                >
-                                  {getStatusLabel(report.status)}
-                                </span>
-                              </div>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Fecha hasta
+                        </label>
+                        <input
+                          type="date"
+                          value={dateTo}
+                          onChange={(e) => setDateTo(e.target.value)}
+                          className={dateInputClass}
+                        />
+                      </div>
 
-                              <div className="mt-3 grid gap-3 text-sm text-white/60 md:grid-cols-2">
-                                <div>
-                                  <span className="text-white/40">Fecha:</span>{" "}
-                                  {formatDateTime(report.created_at)}
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Rangos rápidos
+                        </label>
+                        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+                          <button
+                            type="button"
+                            onClick={() => applyDatePreset("today")}
+                            className="rounded-2xl border border-white/10 px-3 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:px-4"
+                          >
+                            Hoy
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => applyDatePreset("last7")}
+                            className="rounded-2xl border border-white/10 px-3 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:px-4"
+                          >
+                            7 días
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => applyDatePreset("last30")}
+                            className="rounded-2xl border border-white/10 px-3 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:px-4"
+                          >
+                            30 días
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {hasInvalidDateRange && (
+                      <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                        La fecha “desde” no puede ser mayor que la fecha “hasta”.
+                      </div>
+                    )}
+
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-[#141410] px-4 py-3 text-sm text-white/60">
+                      Mostrando{" "}
+                      <span className="font-semibold text-white">
+                        {filteredReports.length}
+                      </span>{" "}
+                      reporte{filteredReports.length === 1 ? "" : "s"}. Con
+                      teléfono del reportante:{" "}
+                      <span className="font-semibold text-white">
+                        {reportsWithPhone}
+                      </span>
+                      . Con ubicación:{" "}
+                      <span className="font-semibold text-white">
+                        {reportsWithLocation}
+                      </span>
+                      .
+                    </div>
+                  </section>
+
+                  <section className="mt-8 grid gap-5">
+                    {filteredReports.length === 0 ? (
+                      <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
+                        <div className="text-2xl font-semibold">
+                          No se encontraron reportes
+                        </div>
+                        <p className="mt-3 text-sm leading-7 text-white/65">
+                          Ajusta la búsqueda o los filtros para ver otros
+                          resultados.
+                        </p>
+                      </div>
+                    ) : (
+                      paginatedReports.map((report) => {
+                        const pet = firstRelation(report.pets);
+                        const tag = firstRelation(report.tags);
+                        const tagCode = tag?.code || "";
+
+                        const ownerName = getOwnerName(pet);
+                        const ownerPhone = getOwnerPhone(pet);
+                        const ownerEmail = getOwnerEmail(pet);
+                        const ownerWhatsappUrl = getOwnerWhatsAppUrl(
+                          ownerPhone,
+                          pet?.name,
+                          tagCode
+                        );
+                        const ownerCallUrl = getPhoneCallUrl(ownerPhone);
+
+                        const whatsappUrl = getWhatsAppUrl(
+                          report.reporter_phone,
+                          tagCode
+                        );
+                        const callUrl = getPhoneCallUrl(report.reporter_phone);
+                        const mapsUrl = getMapsUrl(report);
+                        const publicProfileUrl = tagCode
+                          ? getPublicProfileUrl(tagCode)
+                          : "";
+
+                        return (
+                          <article
+                            key={report.id}
+                            className="rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6"
+                          >
+                            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                              <div className="min-w-0">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#141410]">
+                                    {pet?.photo_url ? (
+                                      <img
+                                        src={pet.photo_url}
+                                        alt={`Foto de ${pet.name}`}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-xs text-white/35">
+                                        Sin foto
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h2 className="break-words text-2xl font-semibold">
+                                        Reporte{" "}
+                                        {tagCode ? `· ${tagCode}` : ""}
+                                      </h2>
+
+                                      <StatusPill
+                                        className={getStatusClass(report.status)}
+                                      >
+                                        {getStatusLabel(report.status)}
+                                      </StatusPill>
+
+                                      <StatusPill
+                                        className={getSourceClass(report.source)}
+                                      >
+                                        {getSourceLabel(report.source)}
+                                      </StatusPill>
+
+                                      {hasLocation(report) && (
+                                        <StatusPill className="border-blue-400/20 bg-blue-400/10 text-blue-200">
+                                          Con ubicación
+                                        </StatusPill>
+                                      )}
+                                    </div>
+
+                                    <div className="mt-3 grid gap-2 text-sm text-white/62 sm:grid-cols-2 xl:grid-cols-3">
+                                      <SmallInfo
+                                        label="Fecha"
+                                        value={formatDateTime(report.created_at)}
+                                      />
+                                      <SmallInfo
+                                        label="Mascota"
+                                        value={pet?.name || "No vinculada"}
+                                      />
+                                      <SmallInfo
+                                        label="Placa"
+                                        value={tagCode || "No disponible"}
+                                      />
+                                      <SmallInfo
+                                        label="Dueño"
+                                        value={ownerName}
+                                      />
+                                      <SmallInfo
+                                        label="Contacto dueño"
+                                        value={ownerPhone || "No disponible"}
+                                      />
+                                      <SmallInfo
+                                        label="Reportante"
+                                        value={report.reporter_name || "—"}
+                                      />
+                                      <SmallInfo
+                                        label="Teléfono reportante"
+                                        value={report.reporter_phone || "—"}
+                                      />
+                                    </div>
+                                  </div>
                                 </div>
 
-                                <div>
-                                  <span className="text-white/40">
-                                    Reportante:
-                                  </span>{" "}
-                                  {report.reporter_name || "—"}
-                                </div>
+                                {report.location_text && (
+                                  <div className="mt-5 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/70">
+                                    <span className="text-white/45">
+                                      Ubicación:
+                                    </span>{" "}
+                                    {report.location_text}
+                                  </div>
+                                )}
 
-                                <div>
-                                  <span className="text-white/40">
-                                    Teléfono:
-                                  </span>{" "}
-                                  {report.reporter_phone || "—"}
-                                </div>
+                                {report.note && (
+                                  <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/70">
+                                    <span className="text-white/45">Nota:</span>{" "}
+                                    {report.note}
+                                  </div>
+                                )}
 
-                                <div>
-                                  <span className="text-white/40">
-                                    Mascota:
-                                  </span>{" "}
-                                  {pet?.name || "No vinculada"}
-                                </div>
-                              </div>
-
-                              {report.location_text && (
-                                <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm text-white/70">
-                                  <span className="text-white/45">
-                                    Ubicación:
-                                  </span>{" "}
-                                  {report.location_text}
-                                </div>
-                              )}
-
-                              {report.note && (
-                                <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm text-white/70">
-                                  <span className="text-white/45">Nota:</span>{" "}
-                                  {report.note}
-                                </div>
-                              )}
-
-                              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                <InfoBox
-                                  label="Visto"
-                                  value={
-                                    report.viewed_at
-                                      ? formatDateTime(report.viewed_at)
-                                      : "Aún no"
-                                  }
-                                />
-                                <InfoBox
-                                  label="Resuelto"
-                                  value={
-                                    report.resolved_at
-                                      ? formatDateTime(report.resolved_at)
-                                      : "Aún no"
-                                  }
-                                />
-                              </div>
-
-                              {expandedReportId === report.id && (
                                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                                   <InfoBox
-                                    label="ID reporte"
-                                    value={report.id}
+                                    label="Visto"
+                                    value={
+                                      report.viewed_at
+                                        ? formatDateTime(report.viewed_at)
+                                        : "Aún no"
+                                    }
                                   />
+
                                   <InfoBox
-                                    label="ID placa"
-                                    value={report.tag_id}
-                                  />
-                                  <InfoBox
-                                    label="ID mascota"
-                                    value={report.pet_id || "No asociado"}
-                                  />
-                                  <InfoBox
-                                    label="Código de placa"
-                                    value={tag?.code || "No disponible"}
+                                    label="Resuelto"
+                                    value={
+                                      report.resolved_at
+                                        ? formatDateTime(report.resolved_at)
+                                        : "Aún no"
+                                    }
                                   />
                                 </div>
-                              )}
-                            </div>
 
-                            <div>
-                              <div className="rounded-[24px] border border-white/10 bg-[#141410] p-5">
+                                {expandedReportId === report.id && (
+                                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                    <InfoBox label="Dueño" value={ownerName} />
+
+                                    <InfoBox
+                                      label="Correo dueño"
+                                      value={ownerEmail || "No disponible"}
+                                    />
+
+                                    <InfoBox
+                                      label="Teléfono / WhatsApp dueño"
+                                      value={ownerPhone || "No disponible"}
+                                    />
+
+                                    <InfoBox
+                                      label="ID reporte"
+                                      value={report.id}
+                                    />
+
+                                    <InfoBox
+                                      label="ID placa"
+                                      value={report.tag_id}
+                                    />
+
+                                    <InfoBox
+                                      label="ID mascota"
+                                      value={report.pet_id || "No asociado"}
+                                    />
+
+                                    <InfoBox
+                                      label="Código de placa"
+                                      value={tagCode || "No disponible"}
+                                    />
+
+                                    <InfoBox
+                                      label="Latitud"
+                                      value={
+                                        report.location_lat != null
+                                          ? String(report.location_lat)
+                                          : "No disponible"
+                                      }
+                                    />
+
+                                    <InfoBox
+                                      label="Longitud"
+                                      value={
+                                        report.location_lng != null
+                                          ? String(report.location_lng)
+                                          : "No disponible"
+                                      }
+                                    />
+                                  </div>
+                                )}
+                              </div>
+
+                              <aside className="rounded-[24px] border border-white/10 bg-[#141410] p-5">
                                 <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
                                   Acción rápida
                                 </div>
@@ -972,10 +1348,7 @@ export default function AdminReportsPage() {
                                   <CustomSelect
                                     value={report.status}
                                     onChange={(value) =>
-                                      void handleStatusChange(
-                                        report.id,
-                                        value as ReportStatus
-                                      )
+                                      void handleStatusChange(report.id, value as ReportStatus)
                                     }
                                     options={STATUS_OPTIONS.map((status) => ({
                                       value: status,
@@ -985,36 +1358,93 @@ export default function AdminReportsPage() {
                                   />
                                 </div>
 
-                                <div className="mt-4 grid gap-3">
+                                <ActionGroup title="Atender reporte">
+                                  {mapsUrl ? (
+                                    <a
+                                      href={mapsUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-blue-400/20 bg-blue-400/10 px-4 py-3 text-sm font-medium text-blue-100 transition hover:bg-blue-400/15"
+                                    >
+                                      Abrir ubicación
+                                    </a>
+                                  ) : (
+                                    <div className="rounded-2xl border border-white/10 px-4 py-3 text-center text-sm text-white/45">
+                                      Sin coordenadas exactas
+                                    </div>
+                                  )}
+
+                                  {ownerWhatsappUrl ? (
+                                    <a
+                                      href={ownerWhatsappUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm font-medium text-[#F5F0E8] transition hover:bg-[#E8C547]/15"
+                                    >
+                                      WhatsApp dueño
+                                    </a>
+                                  ) : (
+                                    <div className="rounded-2xl border border-white/10 px-4 py-3 text-center text-sm text-white/45">
+                                      Sin WhatsApp del dueño
+                                    </div>
+                                  )}
+
+                                  {ownerCallUrl && (
+                                    <a
+                                      href={ownerCallUrl}
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                    >
+                                      Llamar dueño
+                                    </a>
+                                  )}
+                                </ActionGroup>
+
+                                <ActionGroup title="Contactar reportante">
                                   {whatsappUrl ? (
                                     <a
                                       href={whatsappUrl}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm font-medium text-[#F5F0E8] transition hover:bg-[#E8C547]/15"
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-[#2D5A27]/30 bg-[#2D5A27]/15 px-4 py-3 text-sm font-medium text-green-100 transition hover:bg-[#2D5A27]/20"
                                     >
-                                      Abrir WhatsApp
+                                      WhatsApp reportante
                                     </a>
                                   ) : (
                                     <div className="rounded-2xl border border-white/10 px-4 py-3 text-center text-sm text-white/45">
-                                      Sin teléfono disponible
+                                      Sin teléfono del reportante
                                     </div>
+                                  )}
+
+                                  {callUrl && (
+                                    <a
+                                      href={callUrl}
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                    >
+                                      Llamar reportante
+                                    </a>
+                                  )}
+                                </ActionGroup>
+
+                                <ActionGroup title="Gestión interna">
+                                  {publicProfileUrl && (
+                                    <a
+                                      href={publicProfileUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm font-medium text-[#F5F0E8] transition hover:bg-[#E8C547]/15"
+                                    >
+                                      Abrir perfil público
+                                    </a>
                                   )}
 
                                   <button
                                     type="button"
                                     onClick={async () => {
                                       try {
-                                        await navigator.clipboard.writeText(
-                                          report.id
-                                        );
-                                        setSuccessMsg(
-                                          "ID de reporte copiado correctamente."
-                                        );
+                                        await copyText(report.id);
+                                        setSuccessMsg("ID de reporte copiado correctamente.");
                                       } catch {
-                                        setErrorMsg(
-                                          "No se pudo copiar el ID del reporte."
-                                        );
+                                        setErrorMsg("No se pudo copiar el ID del reporte.");
                                       }
                                     }}
                                     className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
@@ -1022,28 +1452,22 @@ export default function AdminReportsPage() {
                                     Copiar ID del reporte
                                   </button>
 
-                                  {tag?.code ? (
+                                  {tagCode && (
                                     <button
                                       type="button"
                                       onClick={async () => {
                                         try {
-                                          await navigator.clipboard.writeText(
-                                            tag.code
-                                          );
-                                          setSuccessMsg(
-                                            "Código de placa copiado correctamente."
-                                          );
+                                          await copyText(tagCode);
+                                          setSuccessMsg("Código de placa copiado correctamente.");
                                         } catch {
-                                          setErrorMsg(
-                                            "No se pudo copiar el código de placa."
-                                          );
+                                          setErrorMsg("No se pudo copiar el código de placa.");
                                         }
                                       }}
                                       className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
                                     >
                                       Copiar código de placa
                                     </button>
-                                  ) : null}
+                                  )}
 
                                   <button
                                     type="button"
@@ -1054,129 +1478,31 @@ export default function AdminReportsPage() {
                                     }
                                     className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
                                   >
-                                    {expandedReportId === report.id
-                                      ? "Ver menos"
-                                      : "Ver más"}
+                                    {expandedReportId === report.id ? "Ver menos" : "Ver más"}
                                   </button>
-                                </div>
-                              </div>
+                                </ActionGroup>
+                              </aside>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })
+                          </article>
+                        );
+                      })
+                    )}
+                  </section>
+
+                  {filteredReports.length > 0 && (
+                    <PaginationPanel
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      pageInput={pageInput}
+                      paginationItems={paginationItems}
+                      setCurrentPage={setCurrentPage}
+                      setPageInput={setPageInput}
+                      goToPage={goToPage}
+                    />
                   )}
-                </div>
-
-                {filteredReports.length > 0 && (
-                  <div className="mx-auto mt-6 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="text-sm text-white/55">
-                        Página {currentPage} de {totalPages}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCurrentPage(1)}
-                          disabled={currentPage === 1}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Primera
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentPage((prev) => Math.max(1, prev - 1))
-                          }
-                          disabled={currentPage === 1}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Anterior
-                        </button>
-
-                        {paginationItems.map((item, index) =>
-                          item === "ellipsis" ? (
-                            <span
-                              key={`ellipsis-${index}`}
-                              className="px-2 text-sm text-white/45"
-                            >
-                              ...
-                            </span>
-                          ) : (
-                            <button
-                              key={item}
-                              type="button"
-                              onClick={() => setCurrentPage(item)}
-                              className={`min-w-[44px] rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                                currentPage === item
-                                  ? "bg-[#E8C547] text-[#1A1A14] shadow-lg shadow-[#E8C547]/20"
-                                  : "border border-white/10 text-white/85 hover:bg-white/5"
-                              }`}
-                            >
-                              {item}
-                            </button>
-                          )
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentPage((prev) =>
-                              Math.min(totalPages, prev + 1)
-                            )
-                          }
-                          disabled={currentPage === totalPages}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Siguiente
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setCurrentPage(totalPages)}
-                          disabled={currentPage === totalPages}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Última
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 border-t border-white/10 pt-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <label className="text-sm text-white/60">
-                          Ir a página
-                        </label>
-
-                        <input
-                          type="number"
-                          min={1}
-                          max={totalPages}
-                          value={pageInput}
-                          onChange={(e) => setPageInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              goToPage();
-                            }
-                          }}
-                          className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 sm:w-28"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={goToPage}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                        >
-                          Ir
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </section>
       </main>
@@ -1218,10 +1544,12 @@ function StatCard({
 
   const content = (
     <>
-      <div className="text-sm uppercase tracking-[0.14em] text-white/45">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45 sm:text-sm">
         {label}
       </div>
-      <div className="mt-3 text-4xl font-semibold text-[#E8C547]">{value}</div>
+      <div className="mt-3 text-3xl font-semibold text-[#E8C547] sm:text-4xl">
+        {value}
+      </div>
     </>
   );
 
@@ -1230,7 +1558,7 @@ function StatCard({
       <button
         type="button"
         onClick={onClick}
-        className={`rounded-[28px] border p-6 text-left transition hover:-translate-y-[1px] ${variantClass}`}
+        className={`rounded-[24px] border p-4 text-left transition hover:-translate-y-[1px] sm:rounded-[28px] sm:p-6 ${variantClass}`}
       >
         {content}
       </button>
@@ -1238,8 +1566,35 @@ function StatCard({
   }
 
   return (
-    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
+    <div
+      className={`rounded-[24px] border p-4 sm:rounded-[28px] sm:p-6 ${variantClass}`}
+    >
       {content}
+    </div>
+  );
+}
+
+function StatusPill({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className: string;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] ${className}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SmallInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-white/35">{label}:</span>{" "}
+      <span className="text-white/70">{value}</span>
     </div>
   );
 }
@@ -1250,7 +1605,149 @@ function InfoBox({ label, value }: { label: string; value: string }) {
       <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
-      <div className="mt-2 text-sm leading-6 text-white/80">{value}</div>
+      <div className="mt-2 break-words text-sm leading-6 text-white/80">
+        {value}
+      </div>
     </div>
+  );
+}
+
+function ActionGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-5 border-t border-white/10 pt-5">
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
+        {title}
+      </div>
+
+      <div className="grid gap-3">{children}</div>
+    </div>
+  );
+}
+
+function PaginationPanel({
+  currentPage,
+  totalPages,
+  pageInput,
+  paginationItems,
+  setCurrentPage,
+  setPageInput,
+  goToPage,
+}: {
+  currentPage: number;
+  totalPages: number;
+  pageInput: string;
+  paginationItems: Array<number | "ellipsis">;
+  setCurrentPage: Dispatch<SetStateAction<number>>;
+  setPageInput: Dispatch<SetStateAction<string>>;
+  goToPage: () => void;
+}) {
+  return (
+    <section className="mt-6 rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="text-sm text-white/55">
+          Página {currentPage} de {totalPages}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Primera
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Anterior
+          </button>
+
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">
+            {paginationItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="px-2 text-sm text-white/45"
+                >
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setCurrentPage(item)}
+                  className={`min-w-[44px] rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                    currentPage === item
+                      ? "bg-[#E8C547] text-[#1A1A14] shadow-lg shadow-[#E8C547]/20"
+                      : "border border-white/10 text-white/85 hover:bg-white/5"
+                  }`}
+                >
+                  {item}
+                </button>
+              )
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+            }
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Última
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="grid gap-3 sm:flex sm:items-center">
+          <label className="text-sm text-white/60">Ir a página</label>
+
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                goToPage();
+              }
+            }}
+            className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 sm:w-28"
+          />
+
+          <button
+            type="button"
+            onClick={goToPage}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Ir
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }

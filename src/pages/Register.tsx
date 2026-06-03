@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -27,6 +32,7 @@ function getSafeNext(search: string) {
 
   if (!rawNext) return "/activar";
   if (!rawNext.startsWith("/")) return "/activar";
+  if (rawNext.startsWith("//")) return "/activar";
 
   return rawNext;
 }
@@ -157,12 +163,13 @@ function RequirementItem({
 }) {
   return (
     <div
-      className={`rounded-xl border px-3 py-2 text-xs transition ${
+      className={`rounded-xl border px-3 py-2 text-[11px] font-medium transition sm:text-xs ${
         met
           ? "border-green-400/20 bg-green-400/10 text-green-200"
           : "border-white/10 bg-white/5 text-white/55"
       }`}
     >
+      {met ? "✓ " : ""}
       {label}
     </div>
   );
@@ -179,6 +186,7 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -199,7 +207,7 @@ export default function Register() {
     [password]
   );
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (loading || authLoading) return;
@@ -214,6 +222,10 @@ export default function Register() {
 
       if (!trimmedFullName) {
         throw new Error("Ingresa tu nombre completo.");
+      }
+
+      if (!trimmedEmail) {
+        throw new Error("Ingresa tu correo.");
       }
 
       if (!passwordValidation.isValid) {
@@ -276,22 +288,29 @@ export default function Register() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
-            <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-[32px] border border-[#2D5A27]/60 bg-[#12311c] p-6 sm:p-8">
-                <span className="mokko-badge mokko-badge-primary w-fit">
-                  Nuevo en Mokko
-                </span>
+          <div className="mokko-container relative z-10 py-7 md:py-14">
+            <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:gap-8">
+              <div className="order-2 rounded-[28px] border border-[#2D5A27]/60 bg-[#12311c] p-5 sm:p-8 lg:order-1 lg:rounded-[32px]">
+                <div className="space-y-5">
+                  <span className="mokko-badge mokko-badge-primary w-fit">
+                    Nuevo en Mokko
+                  </span>
 
-                <h1 className="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">
-                  Crea tu cuenta y empieza a{" "}
-                  <span className="text-[#E8C547]">proteger a tu mascota</span>
-                </h1>
+                  <div className="space-y-4">
+                    <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                      Crea tu cuenta y empieza a{" "}
+                      <span className="text-[#E8C547]">
+                        proteger a tu mascota
+                      </span>
+                    </h1>
 
-                <p className="mt-4 max-w-xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                  Regístrate para activar tu placa Mokko, registrar a tu mascota
-                  y tener un perfil listo para cuando alguien la encuentre.
-                </p>
+                    <p className="max-w-xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
+                      Regístrate para activar tu placa Mokko, registrar a tu
+                      mascota y tener un perfil listo para cuando alguien la
+                      encuentre.
+                    </p>
+                  </div>
+                </div>
 
                 <div className="mt-8 grid gap-3">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -315,153 +334,193 @@ export default function Register() {
                 </div>
               </div>
 
-              <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm sm:p-8">
-                <div>
-                  <h2 className="text-2xl font-semibold sm:text-3xl">
-                    Crear cuenta
-                  </h2>
-                  <p className="mt-2 text-sm leading-7 text-white/65">
-                    Completa tus datos para comenzar.
-                  </p>
-                </div>
+              <div className="order-1 rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm sm:p-8 lg:order-2 lg:rounded-[32px] lg:p-10">
+                <div className="mx-auto w-full max-w-[500px]">
+                  <div className="space-y-4">
+                    <span className="mokko-badge mokko-badge-primary w-fit lg:hidden">
+                      Nuevo en Mokko
+                    </span>
 
-                <form onSubmit={handleRegister} className="mt-8 space-y-4">
-                  <div>
-                    <label className="mb-2 block text-sm text-white/80">
-                      Nombre completo
-                    </label>
-                    <input
-                      type="text"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
-                      placeholder="Jesús García"
-                      required
-                      disabled={isBusy}
-                      autoComplete="name"
-                    />
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-semibold leading-tight tracking-[-0.01em] sm:text-3xl">
+                        Crear cuenta
+                      </h2>
+
+                      <p className="text-sm leading-7 text-white/65">
+                        Completa tus datos para comenzar.
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm text-white/80">
-                      Correo
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
-                      placeholder="tucorreo@ejemplo.com"
-                      required
-                      disabled={isBusy}
-                      autoComplete="email"
-                    />
-                  </div>
+                  <form
+                    onSubmit={handleRegister}
+                    className="mt-7 space-y-5 sm:mt-8"
+                  >
+                    <div>
+                      <label className="mb-2 block text-sm text-white/80">
+                        Nombre completo
+                      </label>
 
-                  <div>
-                    <label className="mb-2 block text-sm text-white/80">
-                      Contraseña
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
-                      placeholder="••••••••"
-                      required
-                      minLength={8}
-                      disabled={isBusy}
-                      autoComplete="new-password"
-                    />
+                      <input
+                        type="text"
+                        value={fullName}
+                        onChange={(e) => {
+                          setFullName(e.target.value);
+                          setErrorMsg("");
+                          setSuccessMsg("");
+                        }}
+                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-base outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-70 sm:py-3.5"
+                        placeholder="Tu nombre completo"
+                        required
+                        disabled={isBusy}
+                        autoComplete="name"
+                      />
+                    </div>
 
-                    <div className="mt-4 space-y-2">
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${passwordStrength.width} ${passwordStrength.color}`}
+                    <div>
+                      <label className="mb-2 block text-sm text-white/80">
+                        Correo
+                      </label>
+
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          setErrorMsg("");
+                          setSuccessMsg("");
+                        }}
+                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-base outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-70 sm:py-3.5"
+                        placeholder="tucorreo@ejemplo.com"
+                        required
+                        disabled={isBusy}
+                        autoComplete="email"
+                        inputMode="email"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm text-white/80">
+                        Contraseña
+                      </label>
+
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            setErrorMsg("");
+                            setSuccessMsg("");
+                          }}
+                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 pr-24 text-base outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-70 sm:py-3.5"
+                          placeholder="••••••••"
+                          required
+                          minLength={8}
+                          disabled={isBusy}
+                          autoComplete="new-password"
                         />
+
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          disabled={isBusy}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl px-3 py-2 text-xs font-medium text-white/55 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {showPassword ? "Ocultar" : "Mostrar"}
+                        </button>
                       </div>
 
-                      {password && (
-                        <>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-white/40">Seguridad</span>
-                            <span
-                              className={`font-medium ${passwordStrength.textColor}`}
+                      <div className="mt-4 space-y-2">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${passwordStrength.width} ${passwordStrength.color}`}
+                          />
+                        </div>
+
+                        {password && (
+                          <>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-white/40">Seguridad</span>
+                              <span
+                                className={`font-medium ${passwordStrength.textColor}`}
+                              >
+                                {passwordStrength.label}
+                              </span>
+                            </div>
+
+                            <p
+                              className={`text-xs leading-5 ${passwordStrength.textColor}`}
                             >
-                              {passwordStrength.label}
-                            </span>
-                          </div>
+                              {passwordStrength.helper}
+                            </p>
+                          </>
+                        )}
+                      </div>
 
-                          <p
-                            className={`text-xs leading-5 ${passwordStrength.textColor}`}
-                          >
-                            {passwordStrength.helper}
-                          </p>
-                        </>
-                      )}
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <RequirementItem
+                          met={passwordValidation.hasMinLength}
+                          label="8+ caracteres"
+                        />
+                        <RequirementItem
+                          met={passwordValidation.hasLowercase}
+                          label="Minúscula"
+                        />
+                        <RequirementItem
+                          met={passwordValidation.hasUppercase}
+                          label="Mayúscula"
+                        />
+                        <RequirementItem
+                          met={passwordValidation.hasNumber}
+                          label="Número"
+                        />
+                        <RequirementItem
+                          met={passwordValidation.hasSymbol}
+                          label="Símbolo"
+                        />
+                      </div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <RequirementItem
-                        met={passwordValidation.hasMinLength}
-                        label="8+ caracteres"
-                      />
-                      <RequirementItem
-                        met={passwordValidation.hasLowercase}
-                        label="Una minúscula"
-                      />
-                      <RequirementItem
-                        met={passwordValidation.hasUppercase}
-                        label="Una mayúscula"
-                      />
-                      <RequirementItem
-                        met={passwordValidation.hasNumber}
-                        label="Un número"
-                      />
-                      <RequirementItem
-                        met={passwordValidation.hasSymbol}
-                        label="Un símbolo"
-                      />
-                    </div>
+                    {errorMsg && (
+                      <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                        {errorMsg}
+                      </div>
+                    )}
+
+                    {successMsg && (
+                      <div className="rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
+                        {successMsg}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isBusy}
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:py-3.5"
+                    >
+                      {loading
+                        ? "Creando cuenta..."
+                        : authLoading
+                          ? "Cargando..."
+                          : "Crear cuenta"}
+                    </button>
+
+                    <p className="text-center text-xs leading-5 text-white/40">
+                      Usa al menos 8 caracteres, una minúscula, una mayúscula,
+                      un número y un símbolo.
+                    </p>
+                  </form>
+
+                  <div className="mt-7 text-sm text-white/60">
+                    ¿Ya tienes cuenta?{" "}
+                    <Link
+                      to={`/login?next=${encodeURIComponent(next)}`}
+                      className="font-semibold text-[#E8C547] transition hover:text-[#f0cf55]"
+                    >
+                      Iniciar sesión
+                    </Link>
                   </div>
-
-                  {errorMsg && (
-                    <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                      {errorMsg}
-                    </div>
-                  )}
-
-                  {successMsg && (
-                    <div className="rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                      {successMsg}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isBusy}
-                    className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {loading
-                      ? "Creando cuenta..."
-                      : authLoading
-                      ? "Cargando..."
-                      : "Crear cuenta"}
-                  </button>
-
-                  <p className="text-center text-xs text-white/40">
-                    Usa al menos 8 caracteres, una minúscula, una mayúscula, un número y un símbolo.
-                  </p>
-                </form>
-
-                <div className="mt-6 text-sm text-white/60">
-                  ¿Ya tienes cuenta?{" "}
-                  <Link
-                    to={`/login?next=${encodeURIComponent(next)}`}
-                    className="font-medium text-[#E8C547] transition hover:text-[#f0cf55]"
-                  >
-                    Iniciar sesión
-                  </Link>
                 </div>
               </div>
             </div>

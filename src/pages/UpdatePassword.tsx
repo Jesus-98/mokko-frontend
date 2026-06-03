@@ -139,12 +139,13 @@ function RequirementItem({
 }) {
   return (
     <div
-      className={`rounded-xl border px-3 py-2 text-xs transition ${
+      className={`rounded-xl border px-3 py-2 text-[11px] font-medium transition sm:text-xs ${
         met
           ? "border-green-400/20 bg-green-400/10 text-green-200"
           : "border-white/10 bg-white/5 text-white/55"
       }`}
     >
+      {met ? "✓ " : ""}
       {label}
     </div>
   );
@@ -155,6 +156,9 @@ export default function UpdatePassword() {
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [checkingSession, setCheckingSession] = useState(true);
   const [hasValidSession, setHasValidSession] = useState(false);
@@ -288,9 +292,7 @@ export default function UpdatePassword() {
       if (error instanceof Error) {
         setErrorMsg(getReadablePasswordError(error.message));
       } else {
-        setErrorMsg(
-          "Ocurrió un error inesperado al actualizar la contraseña."
-        );
+        setErrorMsg("Ocurrió un error inesperado al actualizar la contraseña.");
       }
     } finally {
       setLoading(false);
@@ -298,6 +300,7 @@ export default function UpdatePassword() {
   };
 
   const title = isRecoveryFlow ? "Crear nueva contraseña" : "Actualizar contraseña";
+
   const subtitle = isRecoveryFlow
     ? "Define una nueva contraseña para recuperar el acceso a tu cuenta."
     : "Cambia tu contraseña y mantén tu cuenta protegida.";
@@ -310,168 +313,224 @@ export default function UpdatePassword() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
-            <div className="mx-auto max-w-md rounded-[28px] border border-white/10 bg-[#141410]/80 p-6 shadow-2xl backdrop-blur-md sm:p-7">
-              <div className="text-center">
-                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {title}
-                </h1>
-                <p className="mt-2 text-sm text-white/60">{subtitle}</p>
-              </div>
+          <div className="mokko-container relative z-10 py-7 md:py-14">
+            <div className="mx-auto max-w-xl rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm sm:p-8 lg:rounded-[32px] lg:p-10">
+              <div className="mx-auto w-full max-w-[500px]">
+                <div className="space-y-4">
+                  <span className="mokko-badge mokko-badge-primary w-fit">
+                    Seguridad Mokko
+                  </span>
 
-              {checkingSession ? (
-                <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-white/70">
-                  Validando acceso...
-                </div>
-              ) : !hasValidSession ? (
-                <div className="mt-8 space-y-4">
-                  {errorMsg && (
-                    <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                      {errorMsg}
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <h1 className="text-2xl font-semibold leading-tight tracking-[-0.01em] sm:text-3xl">
+                      {title}
+                    </h1>
 
-                  <div className="grid gap-3">
-                    <button
-                      type="button"
-                      onClick={() => navigate("/login")}
-                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:bg-[#f0cf55]"
-                    >
-                      Ir a iniciar sesión
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate("/login")}
-                      className="w-full rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                    >
-                      Solicitar nuevo enlace
-                    </button>
+                    <p className="text-sm leading-7 text-white/65">
+                      {subtitle}
+                    </p>
                   </div>
                 </div>
-              ) : (
-                <form onSubmit={handleUpdatePassword} className="mt-6 space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm text-white/80">
-                      Nueva contraseña
-                    </label>
 
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 focus:bg-white/10"
-                      placeholder="Ingresa tu nueva contraseña"
-                      disabled={isBusy}
-                      required
-                      autoComplete="new-password"
-                    />
+                {checkingSession ? (
+                  <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm leading-6 text-white/70">
+                    Validando acceso...
+                  </div>
+                ) : !hasValidSession ? (
+                  <div className="mt-8 space-y-5">
+                    {errorMsg && (
+                      <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                        {errorMsg}
+                      </div>
+                    )}
 
-                    <div className="mt-4 space-y-2">
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${passwordStrength.width} ${passwordStrength.color}`}
+                    <div className="rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/60">
+                      Para actualizar tu contraseña necesitas iniciar sesión o
+                      usar un enlace de recuperación válido.
+                    </div>
+
+                    <div className="grid gap-3">
+                      <button
+                        type="button"
+                        onClick={() => navigate("/login")}
+                        className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:bg-[#f0cf55]"
+                      >
+                        Ir a iniciar sesión
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => navigate("/login")}
+                        className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                      >
+                        Solicitar nuevo enlace
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form
+                    onSubmit={handleUpdatePassword}
+                    className="mt-7 space-y-5 sm:mt-8"
+                  >
+                    <div>
+                      <label className="mb-2 block text-sm text-white/80">
+                        Nueva contraseña
+                      </label>
+
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            setErrorMsg("");
+                            setSuccessMsg("");
+                          }}
+                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 pr-24 text-base outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-70 sm:py-3.5"
+                          placeholder="Ingresa tu nueva contraseña"
+                          disabled={isBusy}
+                          required
+                          autoComplete="new-password"
                         />
+
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          disabled={isBusy}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl px-3 py-2 text-xs font-medium text-white/55 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {showPassword ? "Ocultar" : "Mostrar"}
+                        </button>
                       </div>
 
-                      {password && (
-                        <>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-white/40">Seguridad</span>
-                            <span className={`font-medium ${passwordStrength.textColor}`}>
-                              {passwordStrength.label}
-                            </span>
-                          </div>
+                      <div className="mt-4 space-y-2">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${passwordStrength.width} ${passwordStrength.color}`}
+                          />
+                        </div>
 
-                          <p className={`text-xs leading-5 ${passwordStrength.textColor}`}>
-                            {passwordStrength.helper}
-                          </p>
-                        </>
+                        {password && (
+                          <>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-white/40">Seguridad</span>
+                              <span
+                                className={`font-medium ${passwordStrength.textColor}`}
+                              >
+                                {passwordStrength.label}
+                              </span>
+                            </div>
+
+                            <p
+                              className={`text-xs leading-5 ${passwordStrength.textColor}`}
+                            >
+                              {passwordStrength.helper}
+                            </p>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <RequirementItem
+                          met={passwordValidation.hasMinLength}
+                          label="8+ caracteres"
+                        />
+                        <RequirementItem
+                          met={passwordValidation.hasLowercase}
+                          label="Minúscula"
+                        />
+                        <RequirementItem
+                          met={passwordValidation.hasUppercase}
+                          label="Mayúscula"
+                        />
+                        <RequirementItem
+                          met={passwordValidation.hasNumber}
+                          label="Número"
+                        />
+                        <RequirementItem
+                          met={passwordValidation.hasSymbol}
+                          label="Símbolo"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm text-white/80">
+                        Confirmar contraseña
+                      </label>
+
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => {
+                            setConfirmPassword(e.target.value);
+                            setErrorMsg("");
+                            setSuccessMsg("");
+                          }}
+                          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 pr-24 text-base outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:cursor-not-allowed disabled:opacity-70 sm:py-3.5"
+                          placeholder="Repite tu contraseña"
+                          disabled={isBusy}
+                          required
+                          autoComplete="new-password"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowConfirmPassword((prev) => !prev)
+                          }
+                          disabled={isBusy}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl px-3 py-2 text-xs font-medium text-white/55 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {showConfirmPassword ? "Ocultar" : "Mostrar"}
+                        </button>
+                      </div>
+
+                      {confirmPassword.length > 0 && (
+                        <p
+                          className={`mt-3 text-xs ${
+                            passwordsMatch ? "text-green-300" : "text-red-300"
+                          }`}
+                        >
+                          {passwordsMatch
+                            ? "Las contraseñas coinciden"
+                            : "Las contraseñas no coinciden"}
+                        </p>
                       )}
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <RequirementItem
-                        met={passwordValidation.hasMinLength}
-                        label="8+ caracteres"
-                      />
-                      <RequirementItem
-                        met={passwordValidation.hasLowercase}
-                        label="Una minúscula"
-                      />
-                      <RequirementItem
-                        met={passwordValidation.hasUppercase}
-                        label="Una mayúscula"
-                      />
-                      <RequirementItem
-                        met={passwordValidation.hasNumber}
-                        label="Un número"
-                      />
-                      <RequirementItem
-                        met={passwordValidation.hasSymbol}
-                        label="Un símbolo"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-white/80">
-                      Confirmar contraseña
-                    </label>
-
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 focus:bg-white/10"
-                      placeholder="Repite tu contraseña"
-                      disabled={isBusy}
-                      required
-                      autoComplete="new-password"
-                    />
-
-                    {confirmPassword.length > 0 && (
-                      <p
-                        className={`mt-3 text-xs ${
-                          passwordsMatch ? "text-green-300" : "text-red-300"
-                        }`}
-                      >
-                        {passwordsMatch
-                          ? "Las contraseñas coinciden"
-                          : "Las contraseñas no coinciden"}
-                      </p>
+                    {errorMsg && (
+                      <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                        {errorMsg}
+                      </div>
                     )}
-                  </div>
 
-                  {errorMsg && (
-                    <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                      {errorMsg}
-                    </div>
-                  )}
+                    {successMsg && (
+                      <div className="rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
+                        {successMsg}
+                      </div>
+                    )}
 
-                  {successMsg && (
-                    <div className="rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                      {successMsg}
-                    </div>
-                  )}
+                    <button
+                      type="submit"
+                      disabled={isBusy}
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:py-3.5"
+                    >
+                      {redirecting
+                        ? "Redirigiendo..."
+                        : loading
+                          ? "Actualizando..."
+                          : "Actualizar contraseña"}
+                    </button>
 
-                  <button
-                    type="submit"
-                    disabled={isBusy}
-                    className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {redirecting
-                      ? "Redirigiendo..."
-                      : loading
-                        ? "Actualizando..."
-                        : "Actualizar contraseña"}
-                  </button>
-
-                  <p className="text-center text-xs text-white/40">
-                    Usa al menos 8 caracteres, una minúscula, una mayúscula, un número y un símbolo.
-                  </p>
-                </form>
-              )}
+                    <p className="text-center text-xs leading-5 text-white/40">
+                      Usa al menos 8 caracteres, una minúscula, una mayúscula,
+                      un número y un símbolo.
+                    </p>
+                  </form>
+                )}
+              </div>
             </div>
           </div>
         </section>

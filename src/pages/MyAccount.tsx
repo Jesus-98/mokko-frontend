@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
-import Button from "../components/ui/Button";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../components/ui/CustomSelect";
@@ -186,8 +185,21 @@ export default function MyAccount() {
   }, [level3Options]);
 
   const displayEmail = useMemo(() => {
-    return email.trim() || user?.email || profile?.email || "Sin correo registrado";
+    return (
+      email.trim() ||
+      user?.email ||
+      profile?.email ||
+      "Sin correo registrado"
+    );
   }, [email, user?.email, profile?.email]);
+
+  const displayName = fullName.trim() || profile?.full_name || "Usuario Mokko";
+
+  const showLoading = authLoading || loading;
+
+  const dialCodeLabel = selectedCountryDialCode
+    ? `+${selectedCountryDialCode}`
+    : "Sin prefijo";
 
   useEffect(() => {
     if (authLoading) return;
@@ -264,7 +276,10 @@ export default function MyAccount() {
         }
 
         const initialCountryId = accountProfile.country_id || peruId;
-        const initialDialCode = getCountryDialCode(initialCountryId, countriesData);
+        const initialDialCode = getCountryDialCode(
+          initialCountryId,
+          countriesData
+        );
 
         setProfileId(accountProfile.id);
         setFullName(accountProfile.full_name || "");
@@ -348,6 +363,7 @@ export default function MyAccount() {
         setLevel1Options((data ?? []) as GeoDivisionRow[]);
       } catch (error) {
         console.error("Error cargando departamentos:", error);
+
         if (!isMounted) return;
         setLevel1Options([]);
       }
@@ -388,6 +404,7 @@ export default function MyAccount() {
         setLevel2Options((data ?? []) as GeoDivisionRow[]);
       } catch (error) {
         console.error("Error cargando provincias:", error);
+
         if (!isMounted) return;
         setLevel2Options([]);
       }
@@ -426,6 +443,7 @@ export default function MyAccount() {
         setLevel3Options((data ?? []) as GeoDivisionRow[]);
       } catch (error) {
         console.error("Error cargando distritos:", error);
+
         if (!isMounted) return;
         setLevel3Options([]);
       }
@@ -467,7 +485,10 @@ export default function MyAccount() {
 
     const digits = value.replace(/\D/g, "");
 
-    if (digits.length < phoneRule.minDigits || digits.length > phoneRule.maxDigits) {
+    if (
+      digits.length < phoneRule.minDigits ||
+      digits.length > phoneRule.maxDigits
+    ) {
       if (phoneRule.minDigits === phoneRule.maxDigits) {
         setErrorMsg(
           `${fieldName} debe tener ${phoneRule.minDigits} dígitos para el país seleccionado.`
@@ -477,13 +498,14 @@ export default function MyAccount() {
           `${fieldName} debe tener entre ${phoneRule.minDigits} y ${phoneRule.maxDigits} dígitos para el país seleccionado.`
         );
       }
+
       return false;
     }
 
     return true;
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!user?.id || !profileId) {
@@ -527,6 +549,7 @@ export default function MyAccount() {
       setSuccessMsg("Tus datos fueron actualizados correctamente.");
     } catch (error) {
       console.error("Error guardando MyAccount:", error);
+
       setErrorMsg(
         error instanceof Error
           ? error.message
@@ -537,11 +560,6 @@ export default function MyAccount() {
     }
   };
 
-  const showLoading = authLoading || loading;
-  const dialCodeLabel = selectedCountryDialCode
-    ? `+${selectedCountryDialCode}`
-    : "Sin prefijo";
-
   return (
     <>
       <Header />
@@ -550,42 +568,49 @@ export default function MyAccount() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
-            <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.88fr_1.12fr]">
-              <div className="rounded-[32px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-6 sm:p-8">
-                <span className="mokko-badge mokko-badge-primary w-fit">
-                  Mi cuenta
-                </span>
+          <div className="mokko-container relative z-10 py-7 md:py-14">
+            <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[0.88fr_1.12fr] lg:gap-8">
+              <div className="order-2 rounded-[28px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-5 sm:p-8 lg:order-1 lg:rounded-[32px]">
+                <div className="space-y-5">
+                  <span className="mokko-badge mokko-badge-primary w-fit">
+                    Mi cuenta
+                  </span>
 
-                <h1 className="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">
-                  Gestiona tus <span className="text-[#E8C547]">datos</span>
-                </h1>
+                  <div className="space-y-4">
+                    <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                      Gestiona tus{" "}
+                      <span className="text-[#E8C547]">datos</span>
+                    </h1>
 
-                <p className="mt-4 max-w-xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                  Mantén actualizada tu información para que tus placas Mokko y
-                  el perfil de tus mascotas funcionen correctamente.
-                </p>
+                    <p className="max-w-xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
+                      Mantén actualizada tu información para que tus placas Mokko
+                      y el perfil de tus mascotas funcionen correctamente.
+                    </p>
+                  </div>
+                </div>
 
                 <div className="mt-8 grid gap-3">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="text-sm font-medium text-white">
-                      ¿Por qué es importante?
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                      Usuario
                     </div>
-                    <div className="mt-2 text-sm leading-7 text-white/65">
-                      Tus datos ayudan a que puedan contactarte más rápido si
-                      encuentran a tu mascota.
+                    <div className="mt-2 text-base font-semibold">
+                      {displayName}
+                    </div>
+                    <div className="mt-1 break-all text-sm text-white/60">
+                      {displayEmail}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="text-sm font-medium text-white">
-                      Información editable
-                    </div>
-                    <div className="mt-2 text-sm leading-7 text-white/65">
-                      Puedes actualizar tu nombre, teléfono, WhatsApp,
-                      ubicación y dirección cuando quieras.
-                    </div>
-                  </div>
+                  <InfoCard
+                    title="¿Por qué es importante?"
+                    description="Tus datos ayudan a que puedan contactarte más rápido si encuentran a tu mascota."
+                  />
+
+                  <InfoCard
+                    title="Información editable"
+                    description="Puedes actualizar tu nombre, teléfono, WhatsApp, ubicación y dirección cuando quieras."
+                  />
 
                   <button
                     type="button"
@@ -602,184 +627,194 @@ export default function MyAccount() {
                 </div>
               </div>
 
-              <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm sm:p-8">
-                <div>
-                  <h2 className="text-2xl font-semibold sm:text-3xl">
-                    Datos de tu cuenta
-                  </h2>
-                  <p className="mt-2 text-sm leading-7 text-white/65">
-                    Aquí puedes editar la información principal de tu perfil.
-                  </p>
-                </div>
+              <div className="order-1 rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm sm:p-8 lg:order-2 lg:rounded-[32px] lg:p-10">
+                <div className="mx-auto w-full max-w-[620px]">
+                  <div className="space-y-4">
+                    <span className="mokko-badge mokko-badge-primary w-fit lg:hidden">
+                      Mi cuenta
+                    </span>
 
-                {showLoading ? (
-                  <div className="py-12 text-white/65">Cargando datos...</div>
-                ) : (
-                  <form onSubmit={handleSave} className="mt-8 space-y-4">
-                    <div>
-                      <FieldLabel>Nombre completo</FieldLabel>
-                      <TextInput
-                        type="text"
-                        value={fullName}
-                        onChange={(e) => {
-                          setFullName(e.target.value);
-                          setErrorMsg("");
-                          setSuccessMsg("");
-                        }}
-                        placeholder="Jesús Huarcaya"
-                      />
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-semibold leading-tight tracking-[-0.01em] sm:text-3xl">
+                        Datos de tu cuenta
+                      </h2>
+
+                      <p className="text-sm leading-7 text-white/65">
+                        Aquí puedes editar la información principal de tu perfil.
+                      </p>
                     </div>
-
-                  <div>
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <FieldLabel>Correo de acceso</FieldLabel>
-                      <span className="rounded-full border border-[#E8C547]/20 bg-[#E8C547]/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-[#f6df8a]">
-                        Vinculado a tu cuenta
-                      </span>
-                    </div>
-
-                    <div className="rounded-2xl border border-[#E8C547]/18 bg-[#E8C547]/[0.06] px-4 py-4">
-                      <div className="text-base font-medium text-[#F5F0E8]">{displayEmail}</div>
-                    </div>
-
-                    <p className="mt-2 text-xs leading-6 text-white/45">
-                      Este correo está vinculado al acceso de tu cuenta y por ahora no se puede cambiar desde esta sección.
-                    </p>
                   </div>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <FieldLabel>Teléfono</FieldLabel>
-                        <TextInput
-                          type="text"
-                          value={phone}
-                          onChange={(e) => {
-                            setPhone(sanitizeLocalPhoneInput(e.target.value));
-                            setErrorMsg("");
-                            setSuccessMsg("");
-                          }}
-                          placeholder={phoneRule.placeholder}
-                          inputMode="numeric"
-                          maxLength={phoneRule.maxDigits}
-                        />
-                        <p className="mt-2 text-xs text-white/45">
-                          Prefijo aplicado: {dialCodeLabel}. Ingresa solo el número local.
-                        </p>
-                      </div>
-
-                      <div>
-                        <FieldLabel>WhatsApp</FieldLabel>
-                        <TextInput
-                          type="text"
-                          value={whatsappPhone}
-                          onChange={(e) => {
-                            setWhatsappPhone(sanitizeLocalPhoneInput(e.target.value));
-                            setErrorMsg("");
-                            setSuccessMsg("");
-                          }}
-                          placeholder={phoneRule.placeholder}
-                          inputMode="numeric"
-                          maxLength={phoneRule.maxDigits}
-                        />
-                        <p className="mt-2 text-xs text-white/45">
-                          Prefijo aplicado: {dialCodeLabel}. Ingresa solo el número local.
-                        </p>
-                      </div>
+                  {showLoading ? (
+                    <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm leading-6 text-white/70">
+                      Cargando datos...
                     </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <FieldLabel>País</FieldLabel>
-                        <CustomSelect
-                          value={countryId}
-                          onChange={handleCountryChange}
-                          options={countrySelectOptions}
-                          placeholder="Selecciona un país"
-                        />
-                      </div>
-
-                      <div>
-                        <FieldLabel>Departamento</FieldLabel>
-                        <CustomSelect
-                          value={divisionLevel1Id}
-                          onChange={handleLevel1Change}
-                          options={level1SelectOptions}
-                          placeholder="Selecciona un departamento"
-                          disabled={!countryId}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <FieldLabel>Provincia</FieldLabel>
-                        <CustomSelect
-                          value={divisionLevel2Id}
-                          onChange={handleLevel2Change}
-                          options={level2SelectOptions}
-                          placeholder="Selecciona una provincia"
-                          disabled={!divisionLevel1Id}
-                        />
-                      </div>
-
-                      <div>
-                        <FieldLabel>Distrito</FieldLabel>
-                        <CustomSelect
-                          value={divisionLevel3Id}
-                          onChange={(value) => {
-                            setDivisionLevel3Id(value);
-                            setErrorMsg("");
-                            setSuccessMsg("");
-                          }}
-                          options={level3SelectOptions}
-                          placeholder="Selecciona un distrito"
-                          disabled={!divisionLevel2Id}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <FieldLabel>Dirección</FieldLabel>
-                      <TextInput
-                        type="text"
-                        value={addressLine}
-                        onChange={(e) => {
-                          setAddressLine(e.target.value);
-                          setErrorMsg("");
-                          setSuccessMsg("");
-                        }}
-                        placeholder="Av., calle, referencia u otra información útil"
-                      />
-                    </div>
-
-                    {warningMsg && !errorMsg && (
-                      <div className="rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
-                        {warningMsg}
-                      </div>
-                    )}
-
-                    {errorMsg && (
-                      <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                        {errorMsg}
-                      </div>
-                    )}
-
-                    {successMsg && (
-                      <div className="rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                        {successMsg}
-                      </div>
-                    )}
-
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      disabled={saving}
-                      className="w-full"
+                  ) : (
+                    <form
+                      onSubmit={handleSave}
+                      className="mt-7 space-y-5 sm:mt-8"
                     >
-                      {saving ? "Guardando cambios..." : "Guardar cambios"}
-                    </Button>
-                  </form>
-                )}
+                      <div>
+                        <FieldLabel>Nombre completo</FieldLabel>
+                        <TextInput
+                          type="text"
+                          value={fullName}
+                          onChange={(e) => {
+                            setFullName(e.target.value);
+                            setErrorMsg("");
+                            setSuccessMsg("");
+                          }}
+                          placeholder="Tu nombre completo"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                          <FieldLabel>Correo de acceso</FieldLabel>
+
+                          <span className="rounded-full border border-[#E8C547]/20 bg-[#E8C547]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#f6df8a] sm:text-[11px]">
+                            Vinculado
+                          </span>
+                        </div>
+
+                        <div className="rounded-2xl border border-[#E8C547]/18 bg-[#E8C547]/[0.06] px-4 py-4">
+                          <div className="break-all text-base font-medium text-[#F5F0E8]">
+                            {displayEmail}
+                          </div>
+                        </div>
+
+                        <p className="mt-2 text-xs leading-6 text-white/45">
+                          Este correo está vinculado al acceso de tu cuenta y
+                          por ahora no se puede cambiar desde esta sección.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <PhoneField
+                          label="Teléfono"
+                          value={phone}
+                          onChange={(value) => {
+                            setPhone(sanitizeLocalPhoneInput(value));
+                            setErrorMsg("");
+                            setSuccessMsg("");
+                          }}
+                          placeholder={phoneRule.placeholder}
+                          maxLength={phoneRule.maxDigits}
+                          dialCodeLabel={dialCodeLabel}
+                        />
+
+                        <PhoneField
+                          label="WhatsApp"
+                          value={whatsappPhone}
+                          onChange={(value) => {
+                            setWhatsappPhone(sanitizeLocalPhoneInput(value));
+                            setErrorMsg("");
+                            setSuccessMsg("");
+                          }}
+                          placeholder={phoneRule.placeholder}
+                          maxLength={phoneRule.maxDigits}
+                          dialCodeLabel={dialCodeLabel}
+                        />
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <FieldLabel>País</FieldLabel>
+                          <CustomSelect
+                            value={countryId}
+                            onChange={handleCountryChange}
+                            options={countrySelectOptions}
+                            placeholder="Selecciona un país"
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>Departamento</FieldLabel>
+                          <CustomSelect
+                            value={divisionLevel1Id}
+                            onChange={handleLevel1Change}
+                            options={level1SelectOptions}
+                            placeholder="Selecciona un departamento"
+                            disabled={!countryId}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <FieldLabel>Provincia</FieldLabel>
+                          <CustomSelect
+                            value={divisionLevel2Id}
+                            onChange={handleLevel2Change}
+                            options={level2SelectOptions}
+                            placeholder="Selecciona una provincia"
+                            disabled={!divisionLevel1Id}
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>Distrito</FieldLabel>
+                          <CustomSelect
+                            value={divisionLevel3Id}
+                            onChange={(value) => {
+                              setDivisionLevel3Id(value);
+                              setErrorMsg("");
+                              setSuccessMsg("");
+                            }}
+                            options={level3SelectOptions}
+                            placeholder="Selecciona un distrito"
+                            disabled={!divisionLevel2Id}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <FieldLabel>Dirección</FieldLabel>
+                        <TextInput
+                          type="text"
+                          value={addressLine}
+                          onChange={(e) => {
+                            setAddressLine(e.target.value);
+                            setErrorMsg("");
+                            setSuccessMsg("");
+                          }}
+                          placeholder="Av., calle, referencia u otra información útil"
+                        />
+                        <p className="mt-2 text-xs leading-6 text-white/45">
+                          Este dato puede ayudarte a organizar tus pedidos o
+                          referencias internas. Evita colocar información que no
+                          quieras compartir.
+                        </p>
+                      </div>
+
+                      {warningMsg && !errorMsg && (
+                        <div className="rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm leading-6 text-[#f6df8a]">
+                          {warningMsg}
+                        </div>
+                      )}
+
+                      {errorMsg && (
+                        <div className="rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                          {errorMsg}
+                        </div>
+                      )}
+
+                      {successMsg && (
+                        <div className="rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
+                          {successMsg}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={saving}
+                        className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:py-3.5"
+                      >
+                        {saving ? "Guardando cambios..." : "Guardar cambios"}
+                      </button>
+                    </form>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -788,5 +823,64 @@ export default function MyAccount() {
 
       <Footer />
     </>
+  );
+}
+
+function InfoCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="text-sm font-medium text-white">{title}</div>
+      <div className="mt-2 text-sm leading-7 text-white/65">
+        {description}
+      </div>
+    </div>
+  );
+}
+
+function PhoneField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  dialCodeLabel,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  maxLength: number;
+  dialCodeLabel: string;
+}) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+
+      <div className="flex rounded-2xl border border-white/10 bg-white/5 focus-within:border-[#E8C547]/60">
+        <div className="flex min-w-[76px] items-center justify-center border-r border-white/10 px-3 text-sm font-medium text-white/65">
+          {dialCodeLabel}
+        </div>
+
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          inputMode="numeric"
+          maxLength={maxLength}
+          className="min-w-0 flex-1 rounded-r-2xl bg-transparent px-4 py-4 text-base text-white outline-none transition placeholder:text-white/30 sm:py-3.5"
+        />
+      </div>
+
+      <p className="mt-2 text-xs leading-6 text-white/45">
+        Ingresa solo el número local, sin prefijo.
+      </p>
+    </div>
   );
 }

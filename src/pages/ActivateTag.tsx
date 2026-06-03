@@ -19,7 +19,7 @@ import { useAuth } from "../context/AuthContext";
 import CustomSelect, {
   type CustomSelectOption,
 } from "../components/ui/CustomSelect";
-import { FieldLabel, TextInput } from "../components/ui/Field";
+import { DateInput, FieldLabel, TextInput } from "../components/ui/Field";
 
 type PasoActivacion = "acceso" | "mascota" | "placa" | "listo";
 type EspecieMascota = "dog" | "cat";
@@ -206,7 +206,8 @@ export default function ActivateTag() {
   const [mensajeAviso, setMensajeAviso] = useState("");
 
   const mascotaSeleccionada = useMemo(
-    () => mascotas.find((mascota) => mascota.id === mascotaSeleccionadaId) ?? null,
+    () =>
+      mascotas.find((mascota) => mascota.id === mascotaSeleccionadaId) ?? null,
     [mascotas, mascotaSeleccionadaId]
   );
 
@@ -267,11 +268,17 @@ export default function ActivateTag() {
   }, [profile?.full_name, profile?.email, user?.email]);
 
   const puedeRegistrarNueva = razas.length > 0;
+  const codigoNormalizadoActual = normalizarCodigo(codigoPlaca);
+  const codigoTieneFormatoValido = /^[A-Z0-9]{6}$/.test(codigoNormalizadoActual);
 
-  const canActivateTag =
-    !!mascotaSeleccionadaId &&
+  const codigoYaVerificado =
     !!codigoVerificado &&
-    codigoVerificado === normalizarCodigo(codigoPlaca) &&
+    !!tagIdVerificado &&
+    codigoVerificado === codigoNormalizadoActual;
+
+  const puedeEnviarActivacion =
+    !!mascotaSeleccionadaId &&
+    codigoTieneFormatoValido &&
     !submitting &&
     !validandoCodigo;
 
@@ -324,7 +331,9 @@ export default function ActivateTag() {
           .order("created_at", { ascending: false });
 
         if (petsError) {
-          throw new Error(`No se pudieron cargar tus mascotas: ${petsError.message}`);
+          throw new Error(
+            `No se pudieron cargar tus mascotas: ${petsError.message}`
+          );
         }
 
         const { data: breedsData, error: breedsError } = await supabase
@@ -356,8 +365,10 @@ export default function ActivateTag() {
             ) {
               return actual;
             }
+
             return mascotasNormalizadas[0].id;
           });
+
           setModoMascota("existente");
         } else {
           setMascotaSeleccionadaId("");
@@ -453,7 +464,8 @@ export default function ActivateTag() {
           owner_user_id: user.id,
           name: nombreMascota.trim(),
           species: especieMascota,
-          breed_id: razaSeleccionada === VALOR_RAZA_CUSTOM ? null : razaSeleccionada,
+          breed_id:
+            razaSeleccionada === VALOR_RAZA_CUSTOM ? null : razaSeleccionada,
           breed_custom:
             razaSeleccionada === VALOR_RAZA_CUSTOM ? razaCustom.trim() : null,
           sex: sexoMascota,
@@ -475,6 +487,7 @@ export default function ActivateTag() {
       setPaso("placa");
     } catch (error) {
       console.error("Error creando mascota:", error);
+
       setMensajeError(
         error instanceof Error
           ? error.message
@@ -530,11 +543,13 @@ export default function ActivateTag() {
       return true;
     } catch (error) {
       console.error("Error verificando código:", error);
+
       setMensajeError(
         error instanceof Error
           ? getReadableTagCheckMessage(null, error.message)
           : "No se pudo verificar el código."
       );
+
       return false;
     } finally {
       setValidandoCodigo(false);
@@ -556,7 +571,12 @@ export default function ActivateTag() {
       return;
     }
 
-    let codigoListo = codigoVerificado === codigoNormalizado && !!tagIdVerificado;
+    if (!/^[A-Z0-9]{6}$/.test(codigoNormalizado)) {
+      setMensajeError("El código debe tener 6 caracteres alfanuméricos.");
+      return;
+    }
+
+    let codigoListo = codigoYaVerificado;
 
     if (!codigoListo) {
       const verificado = await verificarCodigo();
@@ -604,6 +624,7 @@ export default function ActivateTag() {
       setPaso("listo");
     } catch (error) {
       console.error("Error activando placa:", error);
+
       setMensajeError(
         error instanceof Error
           ? getReadableActivationError(error.message)
@@ -633,23 +654,30 @@ export default function ActivateTag() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.16),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.16),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
+          <div className="mokko-container relative z-10 py-7 md:py-14">
             <div className="mx-auto max-w-5xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Activación de placa Mokko
-              </span>
+              <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[36px] md:p-8">
+                <div className="space-y-5">
+                  <span className="mokko-badge mokko-badge-primary w-fit">
+                    Activación de placa Mokko
+                  </span>
 
-              <h1 className="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">
-                Activa tu placa <span className="text-[#E8C547]">paso a paso</span>
-              </h1>
+                  <div className="space-y-4">
+                    <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                      Activa tu placa{" "}
+                      <span className="text-[#E8C547]">paso a paso</span>
+                    </h1>
 
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                Elige o registra una mascota, verifica el código de la placa y
-                termina la activación en pocos pasos.
-              </p>
+                    <p className="max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
+                      Elige o registra una mascota, verifica el código de la
+                      placa y termina la activación en pocos pasos.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="mx-auto mt-8 grid max-w-5xl gap-3 sm:grid-cols-4">
+            <div className="mx-auto mt-6 grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-4 md:mt-8">
               {[
                 { n: 1, label: "Acceso", icon: UserRound },
                 { n: 2, label: "Mascota", icon: PawPrint },
@@ -663,7 +691,7 @@ export default function ActivateTag() {
                 return (
                   <div
                     key={item.n}
-                    className={`rounded-[22px] border px-4 py-4 transition ${
+                    className={`rounded-[20px] border px-3 py-3 transition sm:rounded-[22px] sm:px-4 sm:py-4 ${
                       activo
                         ? "border-[#E8C547]/60 bg-[#E8C547]/10"
                         : completado
@@ -673,7 +701,7 @@ export default function ActivateTag() {
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full sm:h-10 sm:w-10 ${
                           activo
                             ? "bg-[#E8C547] text-[#1A1A14]"
                             : completado
@@ -681,13 +709,16 @@ export default function ActivateTag() {
                               : "bg-white/10 text-white/70"
                         }`}
                       >
-                        <Icon className="h-4.5 w-4.5" />
+                        <Icon className="h-4 w-4" />
                       </div>
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.14em] text-white/40">
+
+                      <div className="min-w-0">
+                        <div className="text-[10px] uppercase tracking-[0.12em] text-white/40 sm:text-[11px] sm:tracking-[0.14em]">
                           Paso {item.n}
                         </div>
-                        <div className="text-sm font-medium">{item.label}</div>
+                        <div className="truncate text-sm font-medium">
+                          {item.label}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -695,32 +726,34 @@ export default function ActivateTag() {
               })}
             </div>
 
-            <div className="mx-auto mt-8 max-w-5xl rounded-[34px] border border-white/10 bg-white/[0.04] p-4 shadow-[0_25px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:p-6">
+            <div className="mx-auto mt-6 max-w-5xl rounded-[30px] border border-white/10 bg-white/[0.04] p-4 shadow-[0_25px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm sm:p-6 md:mt-8 md:rounded-[34px]">
               {cargandoGeneral && (
-                <div className="py-16 text-center text-white/70">Cargando...</div>
+                <div className="py-16 text-center text-white/70">
+                  Cargando...
+                </div>
               )}
 
               {!cargandoGeneral && mensajeError && (
-                <div className="mb-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                <div className="mb-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
                   {mensajeError}
                 </div>
               )}
 
               {!cargandoGeneral && mensajeAviso && !mensajeError && (
-                <div className="mb-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm text-[#f6df8a]">
+                <div className="mb-6 rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-3 text-sm leading-6 text-[#f6df8a]">
                   {mensajeAviso}
                 </div>
               )}
 
               {!cargandoGeneral && mensajeExito && paso !== "listo" && (
-                <div className="mb-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
+                <div className="mb-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
                   {mensajeExito}
                 </div>
               )}
 
               {!cargandoGeneral && paso === "acceso" && (
                 <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-                  <div className="rounded-[28px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-6">
+                  <div className="order-2 rounded-[28px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-5 sm:p-6 lg:order-1">
                     <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
                       <ShieldCheck className="h-5 w-5" />
                     </div>
@@ -731,66 +764,43 @@ export default function ActivateTag() {
 
                     <p className="mt-3 text-sm leading-7 text-white/70">
                       Necesitas una cuenta Mokko para vincular la placa a tu
-                      mascota y gestionar todo desde tu panel.
+                      mascota y gestionarla desde tu panel.
                     </p>
 
-                    <div className="mt-6 space-y-3">
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                        <div className="text-sm font-medium text-white">
-                          ¿Ya tienes cuenta?
-                        </div>
-                        <div className="mt-2 text-sm leading-7 text-white/65">
-                          Inicia sesión y continúa con la activación.
-                        </div>
-                      </div>
+                    <div className="mt-6 grid gap-3">
+                      <InfoCard
+                        title="¿Ya tienes cuenta?"
+                        description="Inicia sesión y continúa con la activación."
+                      />
 
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                        <div className="text-sm font-medium text-white">
-                          ¿Eres nuevo?
-                        </div>
-                        <div className="mt-2 text-sm leading-7 text-white/65">
-                          Crea tu cuenta primero y vuelve para activar la placa.
-                        </div>
-                      </div>
+                      <InfoCard
+                        title="¿Eres nuevo?"
+                        description="Crea tu cuenta primero y vuelve para activar la placa."
+                      />
                     </div>
                   </div>
 
-                  <div className="rounded-[28px] border border-white/10 bg-[#141410] p-6">
-                    <h3 className="text-2xl font-semibold">Continúa con tu activación</h3>
+                  <div className="order-1 rounded-[28px] border border-white/10 bg-[#141410] p-5 sm:p-6 lg:order-2">
+                    <h3 className="text-2xl font-semibold">
+                      Continúa con tu activación
+                    </h3>
+
                     <p className="mt-2 text-sm leading-7 text-white/65">
                       Elige la opción que corresponda para seguir con el flujo.
                     </p>
 
-                    <div className="mt-8 grid gap-4">
-                      <Link
+                    <div className="mt-7 grid gap-3 sm:mt-8">
+                      <ActionLink
                         to="/login?next=/activar"
-                        className="group rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-left transition hover:bg-white/10"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-base font-semibold">Ya tengo cuenta</div>
-                            <div className="mt-1 text-sm text-white/65">
-                              Ir a iniciar sesión
-                            </div>
-                          </div>
-                          <ChevronRight className="h-4.5 w-4.5 text-white/40 transition group-hover:text-white/70" />
-                        </div>
-                      </Link>
+                        title="Ya tengo cuenta"
+                        description="Ir a iniciar sesión"
+                      />
 
-                      <Link
+                      <ActionLink
                         to="/register?next=/activar"
-                        className="group rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-left transition hover:bg-white/10"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-base font-semibold">Soy nuevo</div>
-                            <div className="mt-1 text-sm text-white/65">
-                              Crear cuenta Mokko
-                            </div>
-                          </div>
-                          <ChevronRight className="h-4.5 w-4.5 text-white/40 transition group-hover:text-white/70" />
-                        </div>
-                      </Link>
+                        title="Soy nuevo"
+                        description="Crear cuenta Mokko"
+                      />
                     </div>
                   </div>
                 </div>
@@ -798,7 +808,7 @@ export default function ActivateTag() {
 
               {!cargandoGeneral && paso === "mascota" && (
                 <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-                  <div className="rounded-[28px] border border-[#2D5A27]/60 bg-[#12311c] p-6">
+                  <div className="order-2 rounded-[28px] border border-[#2D5A27]/60 bg-[#12311c] p-5 sm:p-6 lg:order-1">
                     <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2D5A27] text-white">
                       <PawPrint className="h-5 w-5" />
                     </div>
@@ -855,16 +865,17 @@ export default function ActivateTag() {
                             <span className="text-white/45">Raza:</span>{" "}
                             {razaSeleccionada === VALOR_RAZA_CUSTOM
                               ? razaCustom || "Pendiente"
-                              : opcionesRaza.find((item) => item.value === razaSeleccionada)
-                                  ?.label || "Pendiente"}
+                              : opcionesRaza.find(
+                                  (item) => item.value === razaSeleccionada
+                                )?.label || "Pendiente"}
                           </div>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="rounded-[28px] border border-white/10 bg-[#141410] p-6">
-                    <div className="flex flex-wrap gap-3">
+                  <div className="order-1 rounded-[28px] border border-white/10 bg-[#141410] p-5 sm:p-6 lg:order-2">
+                    <div className="grid grid-cols-2 gap-3">
                       {mascotas.length > 0 && (
                         <button
                           type="button"
@@ -878,7 +889,7 @@ export default function ActivateTag() {
                               : "border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
                           }`}
                         >
-                          Elegir una existente
+                          Existente
                         </button>
                       )}
 
@@ -889,35 +900,43 @@ export default function ActivateTag() {
                           setMensajeError("");
                         }}
                         disabled={!puedeRegistrarNueva}
-                        className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                        className={`inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium transition ${
                           modoMascota === "nueva"
                             ? "bg-[#E8C547] text-[#1A1A14]"
                             : "border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
-                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                        } disabled:cursor-not-allowed disabled:opacity-60 ${
+                          mascotas.length === 0 ? "col-span-2" : ""
+                        }`}
                       >
                         <Plus className="h-4 w-4" />
-                        Registrar nueva
+                        Nueva
                       </button>
                     </div>
 
                     {mascotas.length > 0 && modoMascota === "existente" && (
-                      <div className="mt-6 space-y-4">
+                      <div className="mt-6 space-y-5">
                         <div>
-                          <h3 className="text-2xl font-semibold">Tus mascotas</h3>
+                          <h3 className="text-2xl font-semibold">
+                            Tus mascotas
+                          </h3>
                           <p className="mt-2 text-sm leading-7 text-white/65">
-                            Selecciona la mascota a la que quieres vincular esta placa.
+                            Selecciona la mascota a la que quieres vincular esta
+                            placa.
                           </p>
                         </div>
 
                         <div className="grid gap-3">
                           {mascotas.map((mascota) => {
-                            const seleccionada = mascotaSeleccionadaId === mascota.id;
+                            const seleccionada =
+                              mascotaSeleccionadaId === mascota.id;
 
                             return (
                               <button
                                 key={mascota.id}
                                 type="button"
-                                onClick={() => setMascotaSeleccionadaId(mascota.id)}
+                                onClick={() =>
+                                  setMascotaSeleccionadaId(mascota.id)
+                                }
                                 className={`rounded-[22px] border p-4 text-left transition ${
                                   seleccionada
                                     ? "border-[#E8C547]/50 bg-[#E8C547]/10"
@@ -950,7 +969,7 @@ export default function ActivateTag() {
                         <button
                           type="button"
                           onClick={continuarConMascota}
-                          className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
+                          className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
                         >
                           Continuar con esta mascota
                         </button>
@@ -960,10 +979,12 @@ export default function ActivateTag() {
                     {modoMascota === "nueva" && (
                       <form onSubmit={crearMascota} className="mt-6 space-y-5">
                         <div>
-                          <h3 className="text-2xl font-semibold">Datos de tu mascota</h3>
+                          <h3 className="text-2xl font-semibold">
+                            Datos de tu mascota
+                          </h3>
                           <p className="mt-2 text-sm leading-7 text-white/65">
-                            Completa lo básico ahora. Luego podrás editar más detalles
-                            desde tu dashboard.
+                            Completa lo básico ahora. Luego podrás editar más
+                            detalles desde tu dashboard.
                           </p>
                         </div>
 
@@ -1061,8 +1082,7 @@ export default function ActivateTag() {
 
                           <div>
                             <FieldLabel>Fecha de nacimiento</FieldLabel>
-                            <TextInput
-                              type="date"
+                            <DateInput
                               value={fechaNacimiento}
                               onChange={(e) => {
                                 setFechaNacimiento(e.target.value);
@@ -1090,7 +1110,7 @@ export default function ActivateTag() {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-3">
+                        <div className="grid gap-3 sm:flex sm:flex-wrap">
                           {mascotas.length > 0 && (
                             <button
                               type="button"
@@ -1098,7 +1118,7 @@ export default function ActivateTag() {
                                 setModoMascota("existente");
                                 setMensajeError("");
                               }}
-                              className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                              className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
                             >
                               Volver
                             </button>
@@ -1107,9 +1127,11 @@ export default function ActivateTag() {
                           <button
                             type="submit"
                             disabled={submitting || !puedeRegistrarNueva}
-                            className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                            className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3.5"
                           >
-                            {submitting ? "Guardando..." : "Guardar mascota y continuar"}
+                            {submitting
+                              ? "Guardando..."
+                              : "Guardar mascota y continuar"}
                           </button>
                         </div>
                       </form>
@@ -1120,16 +1142,18 @@ export default function ActivateTag() {
 
               {!cargandoGeneral && paso === "placa" && (
                 <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-                  <div className="rounded-[28px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-6">
+                  <div className="order-2 rounded-[28px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-5 sm:p-6 lg:order-1">
                     <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
                       <Tags className="h-5 w-5" />
                     </div>
 
-                    <h2 className="mt-5 text-2xl font-semibold">Activa tu placa</h2>
+                    <h2 className="mt-5 text-2xl font-semibold">
+                      Activa tu placa
+                    </h2>
 
                     <p className="mt-3 text-sm leading-7 text-white/70">
-                      Ingresa el código único de tu placa Mokko. El sistema detectará
-                      automáticamente el tipo de placa.
+                      Ingresa el código único de tu placa Mokko. El sistema
+                      detectará automáticamente el tipo de placa.
                     </p>
 
                     <div className="mt-6 grid gap-3">
@@ -1165,30 +1189,35 @@ export default function ActivateTag() {
                         <div className="mt-2 flex items-center gap-2 text-base font-semibold">
                           {tipoDetectado ? (
                             <>
-                              <BadgeCheck className="h-4.5 w-4.5 text-[#E8C547]" />
+                              <BadgeCheck className="h-4 w-4 text-[#E8C547]" />
                               {etiquetaPlan(tipoDetectado)}
                             </>
                           ) : (
-                            <span className="text-white/50">Aún no verificado</span>
+                            <span className="text-white/50">
+                              Aún no verificado
+                            </span>
                           )}
                         </div>
 
                         {estadoDetectado && (
                           <div className="mt-2 text-sm text-white/60">
-                            Estado detectado: {etiquetaEstadoTag(estadoDetectado)}
+                            Estado detectado:{" "}
+                            {etiquetaEstadoTag(estadoDetectado)}
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-[28px] border border-white/10 bg-[#141410] p-6">
-                    <form onSubmit={activarPlaca} className="space-y-4">
+                  <div className="order-1 rounded-[28px] border border-white/10 bg-[#141410] p-5 sm:p-6 lg:order-2">
+                    <form onSubmit={activarPlaca} className="space-y-5">
                       <div>
-                        <h3 className="text-2xl font-semibold">Código de activación</h3>
+                        <h3 className="text-2xl font-semibold">
+                          Código de activación
+                        </h3>
                         <p className="mt-2 text-sm leading-7 text-white/65">
-                          El código debe coincidir con el impreso en tu placa o en su
-                          empaque.
+                          El código debe coincidir con el impreso en tu placa o
+                          en su empaque.
                         </p>
                       </div>
 
@@ -1227,20 +1256,26 @@ export default function ActivateTag() {
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap gap-3">
+                      <div className="grid gap-3 sm:flex sm:flex-wrap">
                         <button
                           type="button"
                           onClick={verificarCodigo}
-                          disabled={validandoCodigo || submitting}
-                          className="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-70"
+                          disabled={
+                            validandoCodigo ||
+                            submitting ||
+                            !codigoTieneFormatoValido
+                          }
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3.5"
                         >
-                          <SearchCheck className="h-4.5 w-4.5" />
-                          {validandoCodigo ? "Verificando..." : "Verificar código"}
+                          <SearchCheck className="h-4 w-4" />
+                          {validandoCodigo
+                            ? "Verificando..."
+                            : "Verificar código"}
                         </button>
                       </div>
 
                       {tipoDetectado && (
-                        <div className="rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-4 text-sm text-[#f6df8a]">
+                        <div className="rounded-2xl border border-[#E8C547]/20 bg-[#E8C547]/10 px-4 py-4 text-sm leading-6 text-[#f6df8a]">
                           Tipo detectado automáticamente:{" "}
                           <span className="font-semibold text-white">
                             {etiquetaPlan(tipoDetectado)}
@@ -1248,21 +1283,25 @@ export default function ActivateTag() {
                         </div>
                       )}
 
-                      <div className="flex flex-wrap gap-3">
+                      <div className="grid gap-3 sm:flex sm:flex-wrap">
                         <button
                           type="button"
                           onClick={irAPasoMascota}
-                          className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                          className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
                         >
                           Volver
                         </button>
 
                         <button
                           type="submit"
-                          disabled={!canActivateTag}
-                          className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                          disabled={!puedeEnviarActivacion}
+                          className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3.5"
                         >
-                          {submitting ? "Activando..." : "Activar placa"}
+                          {submitting
+                            ? "Activando..."
+                            : codigoYaVerificado
+                              ? "Activar placa"
+                              : "Verificar y activar"}
                         </button>
                       </div>
                     </form>
@@ -1271,7 +1310,7 @@ export default function ActivateTag() {
               )}
 
               {!cargandoGeneral && paso === "listo" && (
-                <div className="mx-auto max-w-2xl text-center">
+                <div className="mx-auto max-w-2xl py-4 text-center">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#2D5A27] text-white">
                     <CheckCircle2 className="h-8 w-8" />
                   </div>
@@ -1289,7 +1328,7 @@ export default function ActivateTag() {
                   </p>
 
                   {mensajeExito && (
-                    <div className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
+                    <div className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
                       {mensajeExito}
                     </div>
                   )}
@@ -1301,11 +1340,11 @@ export default function ActivateTag() {
                     </span>
                   </div>
 
-                  <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                  <div className="mt-8 grid gap-3 sm:flex sm:items-center sm:justify-center">
                     <button
                       type="button"
                       onClick={activarOtra}
-                      className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                      className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
                     >
                       Activar otra placa
                     </button>
@@ -1313,7 +1352,7 @@ export default function ActivateTag() {
                     <button
                       type="button"
                       onClick={() => navigate("/dashboard")}
-                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
                     >
                       Ir a mi dashboard
                     </button>
@@ -1327,5 +1366,47 @@ export default function ActivateTag() {
 
       <Footer />
     </>
+  );
+}
+
+function InfoCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="text-sm font-medium text-white">{title}</div>
+      <div className="mt-2 text-sm leading-7 text-white/65">
+        {description}
+      </div>
+    </div>
+  );
+}
+
+function ActionLink({
+  to,
+  title,
+  description,
+}: {
+  to: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className="group rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-left transition hover:bg-white/10"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-base font-semibold">{title}</div>
+          <div className="mt-1 text-sm text-white/65">{description}</div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-white/40 transition group-hover:text-white/70" />
+      </div>
+    </Link>
   );
 }

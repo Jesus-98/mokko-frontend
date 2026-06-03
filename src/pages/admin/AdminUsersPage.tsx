@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import Header from "../../components/layout/Header";
 import Footer from "../../components/layout/Footer";
 import { supabase } from "../../lib/supabase";
@@ -78,6 +85,11 @@ type UserViewRow = UserRow & {
   active_tags_count: number;
 };
 
+const ITEMS_PER_PAGE = 10;
+
+const inputClass =
+  "w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 disabled:cursor-not-allowed disabled:opacity-60";
+
 function formatDateTime(value: string) {
   try {
     return new Date(value).toLocaleString("es-PE", {
@@ -129,6 +141,31 @@ function hasLocation(user: UserViewRow) {
       user.division_level_3_id ||
       user.address_line?.trim()
   );
+}
+
+function getPrimaryPhone(user: UserViewRow) {
+  return user.whatsapp_phone?.trim() || user.phone?.trim() || "";
+}
+
+function getWhatsAppUrl(phone: string | null | undefined) {
+  const digits = normalizePhone(phone || "");
+  if (!digits) return "";
+
+  return `https://wa.me/${digits}`;
+}
+
+function getPhoneCallUrl(phone: string | null | undefined) {
+  const digits = normalizePhone(phone || "");
+  if (!digits) return "";
+
+  return `tel:${digits}`;
+}
+
+function getMailUrl(email: string | null | undefined) {
+  const cleanEmail = email?.trim();
+  if (!cleanEmail) return "";
+
+  return `mailto:${cleanEmail}`;
 }
 
 function matchesRegistrationFilter(
@@ -232,6 +269,10 @@ function buildPagination(currentPage: number, totalPages: number) {
 }
 
 async function copyText(value: string) {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error("Tu navegador no permite copiar automáticamente.");
+  }
+
   await navigator.clipboard.writeText(value);
 }
 
@@ -260,8 +301,6 @@ export default function AdminUsersPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
-
-  const ITEMS_PER_PAGE = 10;
 
   const loadUsers = useCallback(async () => {
     if (role !== "admin") return;
@@ -416,10 +455,10 @@ export default function AdminUsersPage() {
 
         return {
           ...user,
-          display_name: user.full_name || "Sin nombre",
-          display_email: user.email || "Sin correo",
-          display_phone: user.phone || "Sin teléfono",
-          display_whatsapp: user.whatsapp_phone || "Sin WhatsApp",
+          display_name: user.full_name?.trim() || "Sin nombre",
+          display_email: user.email?.trim() || "Sin correo",
+          display_phone: user.phone?.trim() || "Sin teléfono",
+          display_whatsapp: user.whatsapp_phone?.trim() || "Sin WhatsApp",
           country_name: country?.name || null,
           division_level_1_name: level1?.name || null,
           division_level_2_name: level2?.name || null,
@@ -445,6 +484,7 @@ export default function AdminUsersPage() {
           ? error.message
           : "No se pudieron cargar los usuarios."
       );
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -453,23 +493,19 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (authLoading) return;
     if (role !== "admin") return;
+
     void loadUsers();
   }, [authLoading, role, loadUsers]);
 
   const totalUsers = users.length;
 
   const usersWithWhatsApp = useMemo(
-    () =>
-      users.filter(
-        (user) =>
-          (user.whatsapp_phone && user.whatsapp_phone.trim() !== "") ||
-          (user.phone && user.phone.trim() !== "")
-      ).length,
+    () => users.filter((user) => getPrimaryPhone(user)).length,
     [users]
   );
 
   const usersWithEmail = useMemo(
-    () => users.filter((user) => user.email && user.email.trim() !== "").length,
+    () => users.filter((user) => hasText(user.email)).length,
     [users]
   );
 
@@ -627,6 +663,9 @@ export default function AdminUsersPage() {
           user.division_level_1_name || "",
           user.division_level_2_name || "",
           user.division_level_3_name || "",
+          String(user.pets_count),
+          String(user.active_tags_count),
+          user.id,
         ].join(" ")
       );
 
@@ -670,6 +709,7 @@ export default function AdminUsersPage() {
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
+
     return filteredUsers.slice(start, end);
   }, [filteredUsers, currentPage]);
 
@@ -807,19 +847,19 @@ export default function AdminUsersPage() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
+          <div className="mokko-container relative z-10 py-7 md:py-14">
             <div className="mx-auto max-w-7xl">
               <AdminPageHeader
                 badge="Admin · Usuarios"
                 title="Gestión de usuarios"
-                description="Revisa usuarios registrados, su ubicación, datos de contacto, mascotas registradas y placas activas."
+                description="Revisa usuarios registrados, ubicación, contacto, mascotas y placas activas."
                 actions={
-                  <>
+                  <div className="grid w-full gap-3 sm:flex sm:w-auto sm:flex-wrap">
                     <button
                       type="button"
                       onClick={exportCsv}
                       disabled={loading || filteredUsers.length === 0}
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     >
                       Exportar CSV
                     </button>
@@ -828,335 +868,369 @@ export default function AdminUsersPage() {
                       type="button"
                       onClick={() => void loadUsers()}
                       disabled={loading}
-                      className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
+                      className="w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                     >
                       {loading ? "Actualizando..." : "Recargar usuarios"}
                     </button>
-                  </>
+                  </div>
                 }
               />
-            </div>
 
-            <AdminFlashMessages
-              success={successMsg}
-              error={errorMsg}
-              warning={errorMsg ? "" : warningMsg}
-              className="mx-auto mt-8 max-w-7xl"
-            />
+              <AdminFlashMessages
+                success={successMsg}
+                error={errorMsg}
+                warning={errorMsg ? "" : warningMsg}
+                className="mt-6"
+              />
 
-            {loading ? (
-              <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
-                Cargando usuarios...
-              </div>
-            ) : (
-              <>
-                <div className="mx-auto mt-8 grid max-w-7xl gap-4 md:grid-cols-5">
-                  <StatCard
-                    label="Total usuarios"
-                    value={totalUsers}
-                    variant="green"
-                    active={quickFilter === "all"}
-                    onClick={() => setQuickFilter("all")}
-                  />
-
-                  <StatCard
-                    label="Con correo"
-                    value={usersWithEmail}
-                    variant="neutral"
-                    active={quickFilter === "with_email"}
-                    onClick={() => setQuickFilter("with_email")}
-                  />
-
-                  <StatCard
-                    label="Con WhatsApp / teléfono"
-                    value={usersWithWhatsApp}
-                    variant="yellow"
-                    active={quickFilter === "with_phone"}
-                    onClick={() => setQuickFilter("with_phone")}
-                  />
-
-                  <StatCard
-                    label="Con ubicación"
-                    value={usersWithLocation}
-                    variant="neutral"
-                    active={quickFilter === "with_location"}
-                    onClick={() => setQuickFilter("with_location")}
-                  />
-
-                  <StatCard
-                    label="Con placas activas"
-                    value={usersWithActiveTags}
-                    variant="yellow"
-                    active={quickFilter === "with_active_tags"}
-                    onClick={() => setQuickFilter("with_active_tags")}
-                  />
+              {loading ? (
+                <div className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/65">
+                  Cargando usuarios...
                 </div>
+              ) : (
+                <>
+                  <section className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+                    <StatCard
+                      label="Total"
+                      value={totalUsers}
+                      variant="green"
+                      active={quickFilter === "all"}
+                      onClick={() => setQuickFilter("all")}
+                    />
 
-                <div className="mx-auto mt-8 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-6">
-                    <div className="xl:col-span-2 2xl:col-span-2">
-                      <label className="mb-2 block text-sm text-white/80">
-                        Buscar usuario
-                      </label>
-                      <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Nombre, correo, teléfono, WhatsApp, dirección..."
-                        className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50"
-                      />
-                    </div>
+                    <StatCard
+                      label="Con correo"
+                      value={usersWithEmail}
+                      variant="neutral"
+                      active={quickFilter === "with_email"}
+                      onClick={() => setQuickFilter("with_email")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        País
-                      </label>
-                      <CustomSelect
-                        value={countryFilter}
-                        onChange={(nextValue) => {
-                          setCountryFilter(nextValue);
-                          setLevel1Filter("");
-                          setLevel2Filter("");
-                          setLevel3Filter("");
-                        }}
-                        options={countryOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
+                    <StatCard
+                      label="Con teléfono"
+                      value={usersWithWhatsApp}
+                      variant="yellow"
+                      active={quickFilter === "with_phone"}
+                      onClick={() => setQuickFilter("with_phone")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Departamento
-                      </label>
-                      <CustomSelect
-                        value={level1Filter}
-                        onChange={(nextValue) => {
-                          setLevel1Filter(nextValue);
-                          setLevel2Filter("");
-                          setLevel3Filter("");
-                        }}
-                        options={level1Options}
-                        placeholder="Todos"
-                        disabled={!countryFilter && level1Options.length === 0}
-                      />
-                    </div>
+                    <StatCard
+                      label="Con ubicación"
+                      value={usersWithLocation}
+                      variant="neutral"
+                      active={quickFilter === "with_location"}
+                      onClick={() => setQuickFilter("with_location")}
+                    />
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Provincia
-                      </label>
-                      <CustomSelect
-                        value={level2Filter}
-                        onChange={(nextValue) => {
-                          setLevel2Filter(nextValue);
-                          setLevel3Filter("");
-                        }}
-                        options={level2Options}
-                        placeholder="Todos"
-                        disabled={!level1Filter && level2Options.length === 0}
-                      />
-                    </div>
+                    <StatCard
+                      label="Con placas"
+                      value={usersWithActiveTags}
+                      variant="yellow"
+                      active={quickFilter === "with_active_tags"}
+                      onClick={() => setQuickFilter("with_active_tags")}
+                    />
+                  </section>
 
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Distrito
-                      </label>
-                      <CustomSelect
-                        value={level3Filter}
-                        onChange={(nextValue) => setLevel3Filter(nextValue)}
-                        options={level3Options}
-                        placeholder="Todos"
-                        disabled={!level2Filter && level3Options.length === 0}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Registro
-                      </label>
-                      <CustomSelect
-                        value={registrationFilter}
-                        onChange={(nextValue) =>
-                          setRegistrationFilter(nextValue as RegistrationFilter)
-                        }
-                        options={registrationOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Mascotas
-                      </label>
-                      <CustomSelect
-                        value={petsFilter}
-                        onChange={(nextValue) =>
-                          setPetsFilter(nextValue as PetsFilter)
-                        }
-                        options={petsOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm text-white/80">
-                        Placas activas
-                      </label>
-                      <CustomSelect
-                        value={activeTagsFilter}
-                        onChange={(nextValue) =>
-                          setActiveTagsFilter(nextValue as ActiveTagsFilter)
-                        }
-                        options={activeTagsOptions}
-                        placeholder="Todos"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm text-white/50">
-                      Mostrando {filteredUsers.length} usuario
-                      {filteredUsers.length === 1 ? "" : "s"}.
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={clearFilters}
-                      className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                    >
-                      Limpiar filtros
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mx-auto mt-8 grid max-w-7xl gap-5">
-                  {filteredUsers.length === 0 ? (
-                    <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
-                      <div className="text-2xl font-semibold">
-                        No se encontraron usuarios
+                  <section className="mt-8 rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <h2 className="text-2xl font-semibold">Filtros</h2>
+                        <p className="mt-2 text-sm leading-7 text-white/60">
+                          Busca por nombre, correo, teléfono, WhatsApp, dirección,
+                          ubicación o ID de usuario.
+                        </p>
                       </div>
-                      <p className="mt-3 text-sm leading-7 text-white/65">
-                        Ajusta la búsqueda o los filtros para ver otros resultados.
-                      </p>
+
+                      <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto"
+                      >
+                        Limpiar filtros
+                      </button>
                     </div>
-                  ) : (
-                    paginatedUsers.map((user) => {
-                      const whatsappSource =
-                        user.whatsapp_phone || user.phone || "";
-                      const whatsappUrl = whatsappSource
-                        ? `https://wa.me/${normalizePhone(whatsappSource)}`
-                        : null;
 
-                      return (
-                        <div
-                          key={user.id}
-                          className="rounded-[32px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm"
-                        >
-                          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-3">
-                                <h2 className="text-2xl font-semibold">
-                                  {user.display_name}
-                                </h2>
+                    <div className="mt-5 grid gap-4 xl:grid-cols-[1.35fr_0.8fr_0.8fr_0.8fr]">
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Buscar usuario
+                        </label>
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Nombre, correo, teléfono, dirección..."
+                          className={inputClass}
+                        />
+                      </div>
 
-                                <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/75">
-                                  {formatCountLabel(
-                                    user.pets_count,
-                                    "mascota",
-                                    "mascotas"
-                                  )}
-                                </span>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Registro
+                        </label>
+                        <CustomSelect
+                          value={registrationFilter}
+                          onChange={(nextValue) =>
+                            setRegistrationFilter(nextValue as RegistrationFilter)
+                          }
+                          options={registrationOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
 
-                                <span
-                                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${
-                                    user.active_tags_count > 0
-                                      ? "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200"
-                                      : "border-white/10 bg-white/5 text-white/70"
-                                  }`}
-                                >
-                                  {formatCountLabel(
-                                    user.active_tags_count,
-                                    "placa activa",
-                                    "placas activas"
-                                  )}
-                                </span>
-                              </div>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Mascotas
+                        </label>
+                        <CustomSelect
+                          value={petsFilter}
+                          onChange={(nextValue) =>
+                            setPetsFilter(nextValue as PetsFilter)
+                          }
+                          options={petsOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
 
-                              <div className="mt-3 grid gap-3 text-sm text-white/60 md:grid-cols-2">
-                                <div>
-                                  <span className="text-white/40">Correo:</span>{" "}
-                                  {user.display_email}
-                                </div>
-                                <div>
-                                  <span className="text-white/40">Teléfono:</span>{" "}
-                                  {user.phone || "—"}
-                                </div>
-                                <div>
-                                  <span className="text-white/40">WhatsApp:</span>{" "}
-                                  {user.whatsapp_phone || "—"}
-                                </div>
-                                <div>
-                                  <span className="text-white/40">Registro:</span>{" "}
-                                  {formatDateTime(user.created_at)}
-                                </div>
-                              </div>
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Placas activas
+                        </label>
+                        <CustomSelect
+                          value={activeTagsFilter}
+                          onChange={(nextValue) =>
+                            setActiveTagsFilter(nextValue as ActiveTagsFilter)
+                          }
+                          options={activeTagsOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
+                    </div>
 
-                              <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm text-white/70">
-                                <span className="text-white/45">Ubicación:</span>{" "}
-                                {user.location_label}
-                              </div>
+                    <div className="mt-4 grid gap-4 xl:grid-cols-4">
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          País
+                        </label>
+                        <CustomSelect
+                          value={countryFilter}
+                          onChange={(nextValue) => {
+                            setCountryFilter(nextValue);
+                            setLevel1Filter("");
+                            setLevel2Filter("");
+                            setLevel3Filter("");
+                          }}
+                          options={countryOptions}
+                          placeholder="Todos"
+                        />
+                      </div>
 
-                              {user.address_line && (
-                                <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm text-white/70">
-                                  <span className="text-white/45">Dirección:</span>{" "}
-                                  {user.address_line}
-                                </div>
-                              )}
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Departamento
+                        </label>
+                        <CustomSelect
+                          value={level1Filter}
+                          onChange={(nextValue) => {
+                            setLevel1Filter(nextValue);
+                            setLevel2Filter("");
+                            setLevel3Filter("");
+                          }}
+                          options={level1Options}
+                          placeholder="Todos"
+                          disabled={!countryFilter && level1Options.length === 0}
+                        />
+                      </div>
 
-                              {expandedUserId === user.id && (
-                                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                  <InfoBox
-                                    label="País"
-                                    value={user.country_name || "No registrado"}
-                                  />
-                                  <InfoBox
-                                    label="Departamento"
-                                    value={
-                                      user.division_level_1_name || "No registrado"
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Provincia
+                        </label>
+                        <CustomSelect
+                          value={level2Filter}
+                          onChange={(nextValue) => {
+                            setLevel2Filter(nextValue);
+                            setLevel3Filter("");
+                          }}
+                          options={level2Options}
+                          placeholder="Todos"
+                          disabled={!level1Filter && level2Options.length === 0}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm text-white/80">
+                          Distrito
+                        </label>
+                        <CustomSelect
+                          value={level3Filter}
+                          onChange={(nextValue) => setLevel3Filter(nextValue)}
+                          options={level3Options}
+                          placeholder="Todos"
+                          disabled={!level2Filter && level3Options.length === 0}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-[#141410] px-4 py-3 text-sm text-white/60">
+                      Mostrando{" "}
+                      <span className="font-semibold text-white">
+                        {filteredUsers.length}
+                      </span>{" "}
+                      usuario{filteredUsers.length === 1 ? "" : "s"}.
+                    </div>
+                  </section>
+
+                  <section className="mt-8 grid gap-5">
+                    {filteredUsers.length === 0 ? (
+                      <div className="rounded-[32px] border border-white/10 bg-white/[0.04] p-8 shadow-2xl backdrop-blur-sm">
+                        <div className="text-2xl font-semibold">
+                          No se encontraron usuarios
+                        </div>
+                        <p className="mt-3 text-sm leading-7 text-white/65">
+                          Ajusta la búsqueda o los filtros para ver otros
+                          resultados.
+                        </p>
+                      </div>
+                    ) : (
+                      paginatedUsers.map((user) => {
+                        const primaryPhone = getPrimaryPhone(user);
+                        const whatsappUrl = getWhatsAppUrl(primaryPhone);
+                        const callUrl = getPhoneCallUrl(primaryPhone);
+                        const mailUrl = getMailUrl(user.email);
+
+                        return (
+                          <article
+                            key={user.id}
+                            className="rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6"
+                          >
+                            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h2 className="break-words text-2xl font-semibold">
+                                    {user.display_name}
+                                  </h2>
+
+                                  <StatusPill className="border-white/10 bg-white/5 text-white/75">
+                                    {formatCountLabel(
+                                      user.pets_count,
+                                      "mascota",
+                                      "mascotas"
+                                    )}
+                                  </StatusPill>
+
+                                  <StatusPill
+                                    className={
+                                      user.active_tags_count > 0
+                                        ? "border-[#2D5A27]/30 bg-[#2D5A27]/15 text-green-200"
+                                        : "border-white/10 bg-white/5 text-white/70"
                                     }
+                                  >
+                                    {formatCountLabel(
+                                      user.active_tags_count,
+                                      "placa activa",
+                                      "placas activas"
+                                    )}
+                                  </StatusPill>
+                                </div>
+
+                                <div className="mt-4 grid gap-2 text-sm text-white/62 sm:grid-cols-2 xl:grid-cols-3">
+                                  <SmallInfo
+                                    label="Correo"
+                                    value={user.display_email}
                                   />
-                                  <InfoBox
-                                    label="Provincia"
-                                    value={
-                                      user.division_level_2_name || "No registrado"
-                                    }
+                                  <SmallInfo
+                                    label="Teléfono"
+                                    value={user.phone || "—"}
                                   />
-                                  <InfoBox
-                                    label="Distrito"
-                                    value={
-                                      user.division_level_3_name || "No registrado"
-                                    }
+                                  <SmallInfo
+                                    label="WhatsApp"
+                                    value={user.whatsapp_phone || "—"}
                                   />
-                                  <InfoBox
-                                    label="Mascotas registradas"
+                                  <SmallInfo
+                                    label="Registro"
+                                    value={formatDateTime(user.created_at)}
+                                  />
+                                  <SmallInfo
+                                    label="Mascotas"
                                     value={String(user.pets_count)}
                                   />
-                                  <InfoBox
+                                  <SmallInfo
                                     label="Placas activas"
                                     value={String(user.active_tags_count)}
                                   />
-                                  <InfoBox label="ID" value={user.id} />
                                 </div>
-                              )}
-                            </div>
 
-                            <div>
-                              <div className="rounded-[24px] border border-white/10 bg-[#141410] p-5">
+                                <div className="mt-5 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/70">
+                                  <span className="text-white/45">
+                                    Ubicación:
+                                  </span>{" "}
+                                  {user.location_label}
+                                </div>
+
+                                {user.address_line && (
+                                  <div className="mt-4 rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/70">
+                                    <span className="text-white/45">
+                                      Dirección:
+                                    </span>{" "}
+                                    {user.address_line}
+                                  </div>
+                                )}
+
+                                {expandedUserId === user.id && (
+                                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                                    <InfoBox
+                                      label="País"
+                                      value={user.country_name || "No registrado"}
+                                    />
+                                    <InfoBox
+                                      label="Departamento"
+                                      value={
+                                        user.division_level_1_name ||
+                                        "No registrado"
+                                      }
+                                    />
+                                    <InfoBox
+                                      label="Provincia"
+                                      value={
+                                        user.division_level_2_name ||
+                                        "No registrado"
+                                      }
+                                    />
+                                    <InfoBox
+                                      label="Distrito"
+                                      value={
+                                        user.division_level_3_name ||
+                                        "No registrado"
+                                      }
+                                    />
+                                    <InfoBox
+                                      label="Mascotas registradas"
+                                      value={String(user.pets_count)}
+                                    />
+                                    <InfoBox
+                                      label="Placas activas"
+                                      value={String(user.active_tags_count)}
+                                    />
+                                    <InfoBox
+                                      label="Correo"
+                                      value={user.email || "No registrado"}
+                                    />
+                                    <InfoBox
+                                      label="Teléfono / WhatsApp"
+                                      value={primaryPhone || "No registrado"}
+                                    />
+                                    <InfoBox label="ID usuario" value={user.id} />
+                                  </div>
+                                )}
+                              </div>
+
+                              <aside className="rounded-[24px] border border-white/10 bg-[#141410] p-5">
                                 <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
                                   Acciones
                                 </div>
 
-                                <div className="mt-4 grid gap-3">
+                                <ActionGroup title="Contacto">
                                   {whatsappUrl ? (
                                     <a
                                       href={whatsappUrl}
@@ -1172,7 +1246,27 @@ export default function AdminUsersPage() {
                                     </div>
                                   )}
 
-                                  {user.email?.trim() ? (
+                                  {callUrl && (
+                                    <a
+                                      href={callUrl}
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                    >
+                                      Llamar usuario
+                                    </a>
+                                  )}
+
+                                  {mailUrl && (
+                                    <a
+                                      href={mailUrl}
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                    >
+                                      Enviar correo
+                                    </a>
+                                  )}
+                                </ActionGroup>
+
+                                <ActionGroup title="Gestión interna">
+                                  {user.email?.trim() && (
                                     <button
                                       type="button"
                                       onClick={async () => {
@@ -1182,14 +1276,37 @@ export default function AdminUsersPage() {
                                             "Correo copiado correctamente."
                                           );
                                         } catch {
-                                          setErrorMsg("No se pudo copiar el correo.");
+                                          setErrorMsg(
+                                            "No se pudo copiar el correo."
+                                          );
                                         }
                                       }}
                                       className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
                                     >
                                       Copiar correo
                                     </button>
-                                  ) : null}
+                                  )}
+
+                                  {primaryPhone && (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          await copyText(primaryPhone);
+                                          setSuccessMsg(
+                                            "Teléfono copiado correctamente."
+                                          );
+                                        } catch {
+                                          setErrorMsg(
+                                            "No se pudo copiar el teléfono."
+                                          );
+                                        }
+                                      }}
+                                      className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+                                    >
+                                      Copiar teléfono
+                                    </button>
+                                  )}
 
                                   <button
                                     type="button"
@@ -1219,121 +1336,29 @@ export default function AdminUsersPage() {
                                       ? "Ver menos"
                                       : "Ver más"}
                                   </button>
-                                </div>
-                              </div>
+                                </ActionGroup>
+                              </aside>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })
+                          </article>
+                        );
+                      })
+                    )}
+                  </section>
+
+                  {filteredUsers.length > 0 && (
+                    <PaginationPanel
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      pageInput={pageInput}
+                      paginationItems={paginationItems}
+                      setCurrentPage={setCurrentPage}
+                      setPageInput={setPageInput}
+                      goToPage={goToPage}
+                    />
                   )}
-                </div>
-
-                {filteredUsers.length > 0 && (
-                  <div className="mx-auto mt-6 max-w-7xl rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="text-sm text-white/55">
-                        Página {currentPage} de {totalPages}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCurrentPage(1)}
-                          disabled={currentPage === 1}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Primera
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentPage((prev) => Math.max(1, prev - 1))
-                          }
-                          disabled={currentPage === 1}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Anterior
-                        </button>
-
-                        {paginationItems.map((item, index) =>
-                          item === "ellipsis" ? (
-                            <span
-                              key={`ellipsis-${index}`}
-                              className="px-2 text-sm text-white/45"
-                            >
-                              ...
-                            </span>
-                          ) : (
-                            <button
-                              key={item}
-                              type="button"
-                              onClick={() => setCurrentPage(item)}
-                              className={`min-w-[44px] rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                                currentPage === item
-                                  ? "bg-[#E8C547] text-[#1A1A14] shadow-lg shadow-[#E8C547]/20"
-                                  : "border border-white/10 text-white/85 hover:bg-white/5"
-                              }`}
-                            >
-                              {item}
-                            </button>
-                          )
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                          }
-                          disabled={currentPage === totalPages}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Siguiente
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setCurrentPage(totalPages)}
-                          disabled={currentPage === totalPages}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Última
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 border-t border-white/10 pt-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <label className="text-sm text-white/60">Ir a página</label>
-
-                        <input
-                          type="number"
-                          min={1}
-                          max={totalPages}
-                          value={pageInput}
-                          onChange={(e) => setPageInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              goToPage();
-                            }
-                          }}
-                          className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 sm:w-28"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={goToPage}
-                          className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
-                        >
-                          Ir
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </section>
       </main>
@@ -1369,49 +1394,196 @@ function StatCard({
           ? "border-[#E8C547]/20 bg-[#E8C547]/8"
           : "border-white/8 bg-white/[0.04]";
 
-  const content = (
-    <>
-      <div className="text-sm uppercase tracking-[0.14em] text-white/45">
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[24px] border p-4 text-left transition hover:-translate-y-[1px] sm:rounded-[28px] sm:p-6 ${variantClass}`}
+    >
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45 sm:text-sm">
         {label}
       </div>
-      <div className="mt-3 text-4xl font-semibold text-[#E8C547]">{value}</div>
-    </>
+      <div className="mt-3 text-3xl font-semibold text-[#E8C547] sm:text-4xl">
+        {value}
+      </div>
+    </button>
   );
+}
 
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={`rounded-[28px] border p-6 text-left transition hover:-translate-y-[1px] ${variantClass}`}
-      >
-        {content}
-      </button>
-    );
-  }
-
+function StatusPill({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className: string;
+}) {
   return (
-    <div className={`rounded-[28px] border p-6 ${variantClass}`}>
-      {content}
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] ${className}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SmallInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-white/35">{label}:</span>{" "}
+      <span className="break-words text-white/70">{value}</span>
     </div>
   );
 }
 
-function InfoBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function InfoBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
       <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
         {label}
       </div>
-      <div className="mt-2 break-all text-sm leading-6 text-white/80">
+      <div className="mt-2 break-words text-sm leading-6 text-white/80">
         {value}
       </div>
     </div>
+  );
+}
+
+function ActionGroup({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-5 border-t border-white/10 pt-5 first:mt-0 first:border-t-0 first:pt-0">
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
+        {title}
+      </div>
+
+      <div className="grid gap-3">{children}</div>
+    </div>
+  );
+}
+
+function PaginationPanel({
+  currentPage,
+  totalPages,
+  pageInput,
+  paginationItems,
+  setCurrentPage,
+  setPageInput,
+  goToPage,
+}: {
+  currentPage: number;
+  totalPages: number;
+  pageInput: string;
+  paginationItems: Array<number | "ellipsis">;
+  setCurrentPage: Dispatch<SetStateAction<number>>;
+  setPageInput: Dispatch<SetStateAction<string>>;
+  goToPage: () => void;
+}) {
+  return (
+    <section className="mt-6 rounded-[32px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="text-sm text-white/55">
+          Página {currentPage} de {totalPages}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Primera
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Anterior
+          </button>
+
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">
+            {paginationItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="px-2 text-sm text-white/45"
+                >
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setCurrentPage(item)}
+                  className={`min-w-[44px] rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                    currentPage === item
+                      ? "bg-[#E8C547] text-[#1A1A14] shadow-lg shadow-[#E8C547]/20"
+                      : "border border-white/10 text-white/85 hover:bg-white/5"
+                  }`}
+                >
+                  {item}
+                </button>
+              )
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+            }
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Siguiente
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Última
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="grid gap-3 sm:flex sm:items-center">
+          <label className="text-sm text-white/60">Ir a página</label>
+
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={pageInput}
+            onChange={(e) => setPageInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                goToPage();
+              }
+            }}
+            className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-white outline-none transition placeholder:text-white/35 focus:border-[#E8C547]/50 sm:w-28"
+          />
+
+          <button
+            type="button"
+            onClick={goToPage}
+            className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
+          >
+            Ir
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }

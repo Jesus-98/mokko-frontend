@@ -1,10 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import {
+  CheckCircle2,
+  Mail,
+  MessageCircle,
+  Palette,
+  Phone,
+  Plus,
+  ReceiptText,
+  Ruler,
+  Shapes,
+  ShoppingBag,
+  Sparkles,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { buildWhatsAppUrl } from "../config/contact";
+import { FieldLabel, TextInput } from "../components/ui/Field";
 
 type PlatePlanType = "essential" | "custom";
 type PlateColor = "white" | "black" | "green";
@@ -61,26 +77,14 @@ const SIZE_OPTIONS_BY_SHAPE: Record<
 };
 
 function createPlateItem(planType: PlatePlanType): OrderPlateItem {
-  if (planType === "essential") {
-    return {
-      id: crypto.randomUUID(),
-      planType: "essential",
-      petName: "",
-      color: "white",
-      shape: "circle",
-      size: "S",
-      unitPrice: PLAN_PRICES.essential,
-    };
-  }
-
   return {
     id: crypto.randomUUID(),
-    planType: "custom",
+    planType,
     petName: "",
     color: "white",
     shape: "circle",
     size: "S",
-    unitPrice: PLAN_PRICES.custom,
+    unitPrice: PLAN_PRICES[planType],
   };
 }
 
@@ -98,8 +102,9 @@ function obtenerDetalleTamano(item: OrderPlateItem) {
   }
 
   return (
-    SIZE_OPTIONS_BY_SHAPE[item.shape].find((option) => option.value === item.size)
-      ?.detail ?? item.size
+    SIZE_OPTIONS_BY_SHAPE[item.shape].find(
+      (option) => option.value === item.size
+    )?.detail ?? item.size
   );
 }
 
@@ -108,13 +113,19 @@ function esCorreoValido(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
+function getPlanLabel(plan: PlatePlanType) {
+  return plan === "essential" ? "Essential" : "Custom";
+}
+
 export default function Order() {
   const location = useLocation();
   const { user, profile } = useAuth();
 
   const [items, setItems] = useState<OrderPlateItem[]>([]);
   const [guestName, setGuestName] = useState(profile?.full_name || "");
-  const [guestEmail, setGuestEmail] = useState(profile?.email || user?.email || "");
+  const [guestEmail, setGuestEmail] = useState(
+    profile?.email || user?.email || ""
+  );
   const [guestPhone, setGuestPhone] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -173,6 +184,16 @@ export default function Order() {
     [items]
   );
 
+  const essentialCount = useMemo(
+    () => items.filter((item) => item.planType === "essential").length,
+    [items]
+  );
+
+  const customCount = useMemo(
+    () => items.filter((item) => item.planType === "custom").length,
+    [items]
+  );
+
   const canSubmit = useMemo(() => {
     if (items.length === 0) return false;
 
@@ -193,10 +214,19 @@ export default function Order() {
     return !!guestPhone.trim() || !!guestEmail.trim() || !!guestName.trim();
   }, [items, user, guestName, guestPhone, guestEmail]);
 
-  const addItem = (planType: PlatePlanType) => {
-    setItems((prev) => [...prev, createPlateItem(planType)]);
+  const clearFeedback = (clearCreatedOrder = true) => {
     setErrorMsg("");
     setSuccessMsg("");
+
+    if (clearCreatedOrder) {
+      setCreatedOrderId("");
+      setCreatedOrderNumber("");
+    }
+  };
+
+  const addItem = (planType: PlatePlanType) => {
+    setItems((prev) => [...prev, createPlateItem(planType)]);
+    clearFeedback();
   };
 
   const removeItem = (id: string) => {
@@ -204,8 +234,7 @@ export default function Order() {
     if (!confirmed) return;
 
     setItems((prev) => prev.filter((item) => item.id !== id));
-    setErrorMsg("");
-    setSuccessMsg("");
+    clearFeedback();
   };
 
   const updateItem = <K extends keyof OrderPlateItem>(
@@ -237,8 +266,7 @@ export default function Order() {
       })
     );
 
-    setErrorMsg("");
-    setSuccessMsg("");
+    clearFeedback();
   };
 
   const buildWhatsappMessage = (orderNumber: string) => {
@@ -252,11 +280,13 @@ export default function Order() {
     items.forEach((item, index) => {
       const colorLabel = obtenerLabelColor(item.color);
       const shapeLabel =
-        item.planType === "essential" ? "Circular" : obtenerLabelForma(item.shape);
+        item.planType === "essential"
+          ? "Circular"
+          : obtenerLabelForma(item.shape);
       const sizeLabel = obtenerDetalleTamano(item);
 
       lines.push(`Placa ${index + 1}`);
-      lines.push(`Tipo: ${item.planType === "essential" ? "Essential" : "Custom"}`);
+      lines.push(`Tipo: ${getPlanLabel(item.planType)}`);
 
       if (item.planType === "custom") {
         lines.push(`Nombre: ${item.petName.trim()}`);
@@ -300,7 +330,9 @@ export default function Order() {
 
     for (const item of items) {
       if (item.planType === "custom" && !item.petName.trim()) {
-        setErrorMsg("Completa el nombre de la mascota en todas las placas Custom.");
+        setErrorMsg(
+          "Completa el nombre de la mascota en todas las placas Custom."
+        );
         return;
       }
     }
@@ -368,6 +400,7 @@ export default function Order() {
       window.open(whatsappUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
       console.error("Error al crear el pedido:", error);
+
       setErrorMsg(
         error instanceof Error
           ? error.message
@@ -386,353 +419,392 @@ export default function Order() {
         <section className="relative overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.14),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.18),transparent_34%)]" />
 
-          <div className="mokko-container relative z-10 py-10 md:py-14">
+          <div className="mokko-container relative z-10 py-7 md:py-14">
             <div className="mx-auto max-w-6xl">
-              <span className="mokko-badge mokko-badge-primary w-fit">
-                Pedido Mokko
-              </span>
+              <div className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-sm md:rounded-[36px] md:p-8">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-5">
+                    <span className="mokko-badge mokko-badge-primary w-fit">
+                      Pedido Mokko
+                    </span>
 
-              <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-                    Configura tus <span className="text-[#E8C547]">placas</span>
-                  </h1>
+                    <div className="space-y-4">
+                      <h1 className="text-3xl font-semibold leading-[1.08] tracking-[-0.02em] sm:text-5xl">
+                        Configura tus{" "}
+                        <span className="text-[#E8C547]">placas</span>
+                      </h1>
 
-                  <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
-                    Puedes combinar placas Essential y Custom en un solo pedido y
-                    cerrarlo por WhatsApp con tu número de orden.
-                  </p>
+                      <p className="max-w-2xl text-sm leading-7 text-white/70 sm:text-base sm:leading-8">
+                        Combina placas Essential y Custom en un solo pedido. Al
+                        finalizar, se generará tu orden y se abrirá WhatsApp para
+                        coordinar el pago y entrega.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:flex sm:flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => addItem("essential")}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Añadir Essential
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => addItem("custom")}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Añadir Custom
+                    </button>
+                  </div>
                 </div>
+              </div>
 
-                <div className="flex flex-wrap gap-3">
+              {errorMsg && (
+                <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm leading-6 text-red-200">
+                  {errorMsg}
+                </div>
+              )}
+
+              {successMsg && (
+                <div className="mt-6 rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm leading-6 text-green-200">
+                  {successMsg}
+                  {createdOrderNumber
+                    ? ` Número de orden: ${createdOrderNumber}`
+                    : ""}
+                </div>
+              )}
+
+              <section className="mt-7 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+                <MetricCard
+                  icon={ShoppingBag}
+                  label="Placas"
+                  value={items.length}
+                  description="En pedido."
+                />
+
+                <MetricCard
+                  icon={CheckCircle2}
+                  label="Essential"
+                  value={essentialCount}
+                  description="Formato fijo."
+                />
+
+                <MetricCard
+                  icon={Sparkles}
+                  label="Custom"
+                  value={customCount}
+                  description="Personalizadas."
+                  highlight={customCount > 0}
+                />
+
+                <MetricCard
+                  icon={ReceiptText}
+                  label="Subtotal"
+                  value={`S/ ${subtotal.toFixed(2)}`}
+                  description="Sin envío."
+                  highlight
+                />
+              </section>
+
+              <div className="mt-7 grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
+                <section className="grid gap-5">
+                  {items.map((item, index) => {
+                    const sizeOptions = SIZE_OPTIONS_BY_SHAPE[item.shape];
+
+                    return (
+                      <article
+                        key={item.id}
+                        className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm transition hover:border-[#E8C547]/20 hover:bg-white/[0.055] md:rounded-[32px] md:p-6"
+                      >
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+                              Placa {index + 1}
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <h2 className="text-2xl font-semibold text-[#F5F0E8]">
+                                {getPlanLabel(item.planType)}
+                              </h2>
+
+                              <StatusPill
+                                className={
+                                  item.planType === "custom"
+                                    ? "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]"
+                                    : "border-white/10 bg-white/5 text-white/75"
+                                }
+                              >
+                                S/ {item.unitPrice.toFixed(2)}
+                              </StatusPill>
+                            </div>
+                          </div>
+
+                          {items.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeItem(item.id)}
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-red-400/20 px-4 py-3 text-sm font-medium text-red-200 transition hover:bg-red-400/10 sm:w-auto"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Eliminar
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="mt-6 grid gap-6">
+                          <section>
+                            <FieldLabel>Tipo de placa</FieldLabel>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <PlanButton
+                                active={item.planType === "essential"}
+                                title="Essential"
+                                description="Circular, simple y lista para usar."
+                                price={PLAN_PRICES.essential}
+                                onClick={() =>
+                                  updateItem(item.id, "planType", "essential")
+                                }
+                              />
+
+                              <PlanButton
+                                active={item.planType === "custom"}
+                                title="Custom"
+                                description="Nombre, color, forma y tamaño."
+                                price={PLAN_PRICES.custom}
+                                onClick={() =>
+                                  updateItem(item.id, "planType", "custom")
+                                }
+                              />
+                            </div>
+                          </section>
+
+                          {item.planType === "custom" && (
+                            <section>
+                              <FieldLabel>Nombre de la mascota</FieldLabel>
+                              <TextInput
+                                type="text"
+                                value={item.petName}
+                                onChange={(e) =>
+                                  updateItem(item.id, "petName", e.target.value)
+                                }
+                                placeholder="Ej. Max"
+                              />
+                            </section>
+                          )}
+
+                          <section>
+                            <div className="mb-3 flex items-center gap-2">
+                              <Palette className="h-4 w-4 text-[#E8C547]" />
+                              <FieldLabel>Color</FieldLabel>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              {COLOR_OPTIONS.map((color) => (
+                                <ColorButton
+                                  key={color.value}
+                                  active={item.color === color.value}
+                                  label={color.label}
+                                  swatch={color.swatch}
+                                  onClick={() =>
+                                    updateItem(item.id, "color", color.value)
+                                  }
+                                />
+                              ))}
+                            </div>
+
+                            <p className="mt-2 text-xs leading-6 text-white/45">
+                              El logo Mokko va siempre en amarillo.
+                            </p>
+                          </section>
+
+                          {item.planType === "essential" ? (
+                            <div className="rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/70">
+                              Essential usa formato fijo:{" "}
+                              <span className="font-medium text-white">
+                                circular · 3 cm de diámetro · color a elección.
+                              </span>
+                            </div>
+                          ) : (
+                            <>
+                              <section>
+                                <div className="mb-3 flex items-center gap-2">
+                                  <Shapes className="h-4 w-4 text-[#E8C547]" />
+                                  <FieldLabel>Forma</FieldLabel>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  {SHAPE_OPTIONS.map((shape) => (
+                                    <OptionButton
+                                      key={shape.value}
+                                      active={item.shape === shape.value}
+                                      title={shape.label}
+                                      onClick={() =>
+                                        updateItem(item.id, "shape", shape.value)
+                                      }
+                                    />
+                                  ))}
+                                </div>
+                              </section>
+
+                              <section>
+                                <div className="mb-3 flex items-center gap-2">
+                                  <Ruler className="h-4 w-4 text-[#E8C547]" />
+                                  <FieldLabel>Tamaño</FieldLabel>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-3">
+                                  {sizeOptions.map((size) => (
+                                    <OptionButton
+                                      key={size.value}
+                                      active={item.size === size.value}
+                                      title={size.label}
+                                      description={size.detail}
+                                      onClick={() =>
+                                        updateItem(item.id, "size", size.value)
+                                      }
+                                    />
+                                  ))}
+                                </div>
+
+                                <p className="mt-2 text-xs leading-6 text-white/45">
+                                  Los tamaños mínimos ya consideran el espacio
+                                  físico del chip NFC.
+                                </p>
+                              </section>
+                            </>
+                          )}
+
+                          <InfoCard
+                            label="Precio de esta placa"
+                            value={`S/ ${item.unitPrice.toFixed(2)}`}
+                            highlight
+                          />
+                        </div>
+                      </article>
+                    );
+                  })}
+                </section>
+
+                <aside className="h-fit rounded-[28px] border border-[#E8C547]/15 bg-[#E8C547]/8 p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px] lg:sticky lg:top-24">
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8C547] text-[#1A1A14]">
+                      <ReceiptText className="h-5 w-5" />
+                    </div>
+
+                    <div>
+                      <h2 className="text-2xl font-semibold">
+                        Resumen del pedido
+                      </h2>
+                      <p className="mt-1 text-sm text-white/60">
+                        Revisa tus datos antes de continuar.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-3">
+                    <InfoCard label="Total de placas" value={String(items.length)} />
+                    <InfoCard
+                      label="Subtotal"
+                      value={`S/ ${subtotal.toFixed(2)}`}
+                      highlight
+                    />
+
+                    {createdOrderNumber && (
+                      <InfoCard
+                        label="Número de orden"
+                        value={createdOrderNumber}
+                      />
+                    )}
+                  </div>
+
+                  <div className="mt-7 space-y-4">
+                    <h3 className="text-lg font-semibold">Datos de contacto</h3>
+
+                    <div>
+                      <div className="mb-2 flex items-center gap-2">
+                        <UserRound className="h-4 w-4 text-white/50" />
+                        <FieldLabel>Nombre</FieldLabel>
+                      </div>
+                      <TextInput
+                        type="text"
+                        value={guestName}
+                        onChange={(e) => {
+                          setGuestName(e.target.value);
+                          clearFeedback(false);
+                        }}
+                        placeholder="Tu nombre"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-white/50" />
+                        <FieldLabel>Correo</FieldLabel>
+                      </div>
+                      <TextInput
+                        type="email"
+                        value={guestEmail}
+                        onChange={(e) => {
+                          setGuestEmail(e.target.value);
+                          clearFeedback(false);
+                        }}
+                        disabled={!!user}
+                        placeholder="tucorreo@ejemplo.com"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="mb-2 flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-white/50" />
+                        <FieldLabel>Teléfono / WhatsApp</FieldLabel>
+                      </div>
+                      <TextInput
+                        type="text"
+                        value={guestPhone}
+                        onChange={(e) => {
+                          setGuestPhone(e.target.value);
+                          clearFeedback(false);
+                        }}
+                        placeholder="+51 999 999 999"
+                      />
+                    </div>
+                  </div>
+
+                  {!user && (
+                    <p className="mt-4 text-xs leading-6 text-white/50">
+                      Puedes continuar como invitado, pero para gestionar tus
+                      placas más fácil luego te conviene{" "}
+                      <Link
+                        to="/register?next=/pedido"
+                        className="font-semibold text-[#E8C547] hover:underline"
+                      >
+                        crear una cuenta
+                      </Link>
+                      .
+                    </p>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => addItem("essential")}
-                    className="rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55]"
+                    onClick={handleCreateOrder}
+                    disabled={!canSubmit || loading}
+                    className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    + Añadir otra placa
+                    <MessageCircle className="h-4 w-4" />
+                    {loading ? "Generando pedido..." : "Continuar por WhatsApp"}
                   </button>
-                </div>
-              </div>
-            </div>
 
-            {errorMsg && (
-              <div className="mx-auto mt-8 max-w-6xl rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                {errorMsg}
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="mx-auto mt-8 max-w-6xl rounded-2xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">
-                {successMsg}
-                {createdOrderNumber ? ` Número de orden: ${createdOrderNumber}` : ""}
-              </div>
-            )}
-
-            <div className="mx-auto mt-8 grid max-w-6xl gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="grid gap-4">
-                {items.map((item, index) => {
-                  const sizeOptions = SIZE_OPTIONS_BY_SHAPE[item.shape];
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="text-sm uppercase tracking-[0.14em] text-white/45">
-                            Placa {index + 1}
-                          </div>
-                          <h2 className="mt-2 text-2xl font-semibold">
-                            {item.planType === "essential" ? "Essential" : "Custom"}
-                          </h2>
-                        </div>
-
-                        {items.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeItem(item.id)}
-                            className="rounded-2xl border border-red-400/20 px-4 py-2 text-sm text-red-200 transition hover:bg-red-400/10"
-                          >
-                            Eliminar
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="mt-5 grid gap-4">
-                        <div>
-                          <label className="mb-2 block text-sm text-white/80">
-                            Tipo de placa
-                          </label>
-
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <button
-                              type="button"
-                              onClick={() => updateItem(item.id, "planType", "essential")}
-                              className={`rounded-2xl border px-4 py-3 text-left transition ${
-                                item.planType === "essential"
-                                  ? "border-[#E8C547]/60 bg-[#E8C547]/10"
-                                  : "border-white/10 bg-white/5 hover:bg-white/10"
-                              }`}
-                            >
-                              <div className="font-semibold">Essential</div>
-                              <div className="mt-1 text-sm text-white/60">
-                                Circular, simple, lista para usar.
-                              </div>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => updateItem(item.id, "planType", "custom")}
-                              className={`rounded-2xl border px-4 py-3 text-left transition ${
-                                item.planType === "custom"
-                                  ? "border-[#E8C547]/60 bg-[#E8C547]/10"
-                                  : "border-white/10 bg-white/5 hover:bg-white/10"
-                              }`}
-                            >
-                              <div className="font-semibold">Custom</div>
-                              <div className="mt-1 text-sm text-white/60">
-                                Nombre, color, forma y tamaño.
-                              </div>
-                            </button>
-                          </div>
-                        </div>
-
-                        {item.planType === "custom" && (
-                          <div>
-                            <label className="mb-2 block text-sm text-white/80">
-                              Nombre de la mascota
-                            </label>
-                            <input
-                              type="text"
-                              value={item.petName}
-                              onChange={(e) =>
-                                updateItem(item.id, "petName", e.target.value)
-                              }
-                              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
-                              placeholder="Ej. Max"
-                            />
-                          </div>
-                        )}
-
-                        <div>
-                          <label className="mb-2 block text-sm text-white/80">
-                            Color
-                          </label>
-
-                          <div className="grid gap-3 sm:grid-cols-3">
-                            {COLOR_OPTIONS.map((color) => (
-                              <button
-                                key={color.value}
-                                type="button"
-                                onClick={() => updateItem(item.id, "color", color.value)}
-                                className={`rounded-2xl border px-4 py-3 transition ${
-                                  item.color === color.value
-                                    ? "border-[#E8C547]/60 bg-[#E8C547]/10"
-                                    : "border-white/10 bg-white/5 hover:bg-white/10"
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <span
-                                    className={`h-4 w-4 rounded-full border border-white/20 ${color.swatch}`}
-                                  />
-                                  <span className="text-sm font-medium">
-                                    {color.label}
-                                  </span>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-
-                          <p className="mt-2 text-xs text-white/45">
-                            El logo Mokko va siempre en amarillo.
-                          </p>
-                        </div>
-
-                        {item.planType === "essential" ? (
-                          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-                            Essential usa formato fijo:
-                            <span className="ml-1 font-medium text-white">
-                              circular · 3 cm de diámetro · color a elección
-                            </span>
-                          </div>
-                        ) : (
-                          <>
-                            <div>
-                              <label className="mb-2 block text-sm text-white/80">
-                                Forma
-                              </label>
-
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                {SHAPE_OPTIONS.map((shape) => (
-                                  <button
-                                    key={shape.value}
-                                    type="button"
-                                    onClick={() =>
-                                      updateItem(item.id, "shape", shape.value)
-                                    }
-                                    className={`rounded-2xl border px-4 py-3 text-left transition ${
-                                      item.shape === shape.value
-                                        ? "border-[#E8C547]/60 bg-[#E8C547]/10"
-                                        : "border-white/10 bg-white/5 hover:bg-white/10"
-                                    }`}
-                                  >
-                                    {shape.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className="mb-2 block text-sm text-white/80">
-                                Tamaño
-                              </label>
-
-                              <div className="grid gap-3 sm:grid-cols-3">
-                                {sizeOptions.map((size) => (
-                                  <button
-                                    key={size.value}
-                                    type="button"
-                                    onClick={() =>
-                                      updateItem(item.id, "size", size.value)
-                                    }
-                                    className={`rounded-2xl border px-4 py-3 text-left transition ${
-                                      item.size === size.value
-                                        ? "border-[#E8C547]/60 bg-[#E8C547]/10"
-                                        : "border-white/10 bg-white/5 hover:bg-white/10"
-                                    }`}
-                                  >
-                                    <div className="font-semibold">{size.label}</div>
-                                    <div className="mt-1 text-xs text-white/50">
-                                      {size.detail}
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-
-                              <p className="mt-2 text-xs text-white/45">
-                                Los tamaños mínimos ya consideran el espacio físico del chip NFC.
-                              </p>
-                            </div>
-                          </>
-                        )}
-
-                        <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
-                          <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                            Precio de esta placa
-                          </div>
-                          <div className="mt-2 text-xl font-semibold text-[#E8C547]">
-                            S/ {item.unitPrice.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="h-fit rounded-[28px] border border-white/10 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-sm">
-                <h2 className="text-2xl font-semibold">Resumen del pedido</h2>
-
-                <div className="mt-6 grid gap-3">
-                  <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                      Total de placas
-                    </div>
-                    <div className="mt-2 text-2xl font-semibold">{items.length}</div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                      Subtotal
-                    </div>
-                    <div className="mt-2 text-2xl font-semibold text-[#E8C547]">
-                      S/ {subtotal.toFixed(2)}
-                    </div>
-                  </div>
-
-                  {createdOrderNumber && (
-                    <div className="rounded-2xl border border-white/10 bg-[#141410] p-4">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
-                        Número de orden
-                      </div>
-                      <div className="mt-2 text-base font-semibold">
-                        {createdOrderNumber}
-                      </div>
-                    </div>
+                  {createdOrderId && (
+                    <p className="mt-3 text-center text-xs leading-6 text-white/45">
+                      Pedido guardado correctamente antes de abrir WhatsApp.
+                    </p>
                   )}
-                </div>
-
-                <div className="mt-6 space-y-4">
-                  <h3 className="text-lg font-semibold">Datos de contacto</h3>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-white/80">
-                      Nombre
-                    </label>
-                    <input
-                      type="text"
-                      value={guestName}
-                      onChange={(e) => setGuestName(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
-                      placeholder="Tu nombre"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-white/80">
-                      Correo
-                    </label>
-                    <input
-                      type="email"
-                      value={guestEmail}
-                      onChange={(e) => setGuestEmail(e.target.value)}
-                      disabled={!!user}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60 disabled:opacity-70"
-                      placeholder="tucorreo@ejemplo.com"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm text-white/80">
-                      Teléfono / WhatsApp
-                    </label>
-                    <input
-                      type="text"
-                      value={guestPhone}
-                      onChange={(e) => setGuestPhone(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none transition placeholder:text-white/30 focus:border-[#E8C547]/60"
-                      placeholder="+51 999 999 999"
-                    />
-                  </div>
-                </div>
-
-                {!user && (
-                  <p className="mt-4 text-xs leading-6 text-white/45">
-                    Puedes continuar como invitado, pero si quieres luego gestionar tus
-                    placas más fácil, te conviene{" "}
-                    <Link to="/register?next=/pedido" className="text-[#E8C547]">
-                      crear una cuenta
-                    </Link>
-                    .
-                  </p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleCreateOrder}
-                  disabled={!canSubmit || loading}
-                  className="mt-6 w-full rounded-2xl bg-[#E8C547] px-5 py-3 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {loading ? "Generando pedido..." : "Continuar por WhatsApp"}
-                </button>
-
-                {createdOrderId && (
-                  <p className="mt-3 text-center text-xs text-white/40">
-                    Pedido guardado correctamente antes de abrir WhatsApp.
-                  </p>
-                )}
+                </aside>
               </div>
             </div>
           </div>
@@ -741,5 +813,201 @@ export default function Order() {
 
       <Footer />
     </>
+  );
+}
+
+function PlanButton({
+  active,
+  title,
+  description,
+  price,
+  onClick,
+}: {
+  active: boolean;
+  title: string;
+  description: string;
+  price: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border p-4 text-left transition ${
+        active
+          ? "border-[#E8C547]/50 bg-[#E8C547]/10"
+          : "border-white/10 bg-[#141410] hover:bg-white/5"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="font-semibold text-white">{title}</div>
+          <div className="mt-1 text-sm leading-6 text-white/60">
+            {description}
+          </div>
+        </div>
+
+        <div className="shrink-0 text-sm font-semibold text-[#E8C547]">
+          S/ {price}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function ColorButton({
+  active,
+  label,
+  swatch,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  swatch: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border p-4 text-left transition ${
+        active
+          ? "border-[#E8C547]/50 bg-[#E8C547]/10"
+          : "border-white/10 bg-[#141410] hover:bg-white/5"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <span className={`h-5 w-5 rounded-full border border-white/20 ${swatch}`} />
+        <span className="text-sm font-medium text-white">{label}</span>
+      </div>
+    </button>
+  );
+}
+
+function OptionButton({
+  active,
+  title,
+  description,
+  onClick,
+}: {
+  active: boolean;
+  title: string;
+  description?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border p-4 text-left transition ${
+        active
+          ? "border-[#E8C547]/50 bg-[#E8C547]/10"
+          : "border-white/10 bg-[#141410] hover:bg-white/5"
+      }`}
+    >
+      <div className="font-semibold text-white">{title}</div>
+
+      {description && (
+        <div className="mt-1 text-xs leading-5 text-white/50">
+          {description}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  description,
+  highlight = false,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | number;
+  description: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[22px] border p-4 sm:rounded-[28px] sm:p-5 ${
+        highlight
+          ? "border-[#E8C547]/20 bg-[#E8C547]/10"
+          : "border-white/10 bg-white/[0.045]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 sm:text-[11px]">
+          {label}
+        </div>
+
+        <div
+          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
+            highlight
+              ? "bg-[#E8C547]/14 text-[#E8C547]"
+              : "bg-white/8 text-white/60"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+
+      <div className="mt-4 text-2xl font-semibold text-[#F5F0E8] sm:text-3xl">
+        {value}
+      </div>
+
+      <p className="mt-2 hidden text-sm leading-7 text-white/62 sm:block">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function InfoCard({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-4 ${
+        highlight
+          ? "border-[#E8C547]/20 bg-[#E8C547]/10"
+          : "border-white/10 bg-[#141410]"
+      }`}
+    >
+      <div className="text-[11px] uppercase tracking-[0.14em] text-white/45">
+        {label}
+      </div>
+
+      <div
+        className={`mt-2 break-words text-lg font-semibold ${
+          highlight ? "text-[#E8C547]" : "text-white"
+        }`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className: string;
+}) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] sm:text-[11px] ${className}`}
+    >
+      {children}
+    </span>
   );
 }
