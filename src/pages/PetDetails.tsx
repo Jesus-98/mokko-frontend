@@ -557,10 +557,10 @@ export default function PetDetails() {
                   <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
                     <button
                       type="button"
-                      onClick={() => navigate("/mis-mascotas")}
+                      onClick={() => navigate(`/mis-mascotas/${petId}/editar`)}
                       className="w-full rounded-2xl border border-white/10 px-5 py-4 text-sm font-medium text-white/85 transition hover:bg-white/5 sm:w-auto sm:py-3.5"
                     >
-                      Editar desde listado
+                      Editar mascota
                     </button>
 
                     <button

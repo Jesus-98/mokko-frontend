@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { Link } from "react-router-dom";
 import {
   HeartPulse,
@@ -104,7 +111,6 @@ export default function MyPets() {
 
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [editingPet, setEditingPet] = useState<PetRow | null>(null);
   const [pets, setPets] = useState<PetCardRow[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -227,13 +233,7 @@ export default function MyPets() {
   }, [authLoading, user?.id, loadPets]);
 
   const openCreate = () => {
-    setEditingPet(null);
     setShowCreate((prev) => !prev);
-  };
-
-  const openEdit = (pet: PetRow) => {
-    setShowCreate(false);
-    setEditingPet(pet);
   };
 
   const totalPets = useMemo(() => pets.length, [pets]);
@@ -357,47 +357,6 @@ export default function MyPets() {
                         void loadPets();
                       }}
                       onCancel={() => setShowCreate(false)}
-                    />
-                  </div>
-                </section>
-              )}
-
-              {editingPet && (
-                <section className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px]">
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-semibold leading-tight">
-                      Editar mascota
-                    </h2>
-                    <p className="text-sm leading-7 text-white/65">
-                      Actualiza la información básica de tu mascota.
-                    </p>
-                  </div>
-
-                  <div className="mt-6">
-                    <PetForm
-                      mode="edit"
-                      initialValues={{
-                        id: editingPet.id,
-                        name: editingPet.name,
-                        species: editingPet.species === "cat" ? "cat" : "dog",
-                        breed_id: editingPet.breed_id,
-                        breed_custom: editingPet.breed_custom ?? "",
-                        sex:
-                          editingPet.sex === "male" ||
-                          editingPet.sex === "female" ||
-                          editingPet.sex === "unknown"
-                            ? editingPet.sex
-                            : "unknown",
-                        color: editingPet.color ?? "",
-                        birthdate: editingPet.birthdate ?? "",
-                        weight_kg: editingPet.weight_kg,
-                        photo_url: editingPet.photo_url ?? "",
-                      }}
-                      onSuccess={() => {
-                        setEditingPet(null);
-                        void loadPets();
-                      }}
-                      onCancel={() => setEditingPet(null)}
                     />
                   </div>
                 </section>
@@ -548,13 +507,12 @@ export default function MyPets() {
                                 </button>
                               )}
 
-                              <button
-                                type="button"
-                                onClick={() => openEdit(pet)}
+                              <Link
+                                to={`/mis-mascotas/${pet.id}/editar?from=list`}
                                 className="inline-flex items-center justify-center rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
                               >
                                 Editar
-                              </button>
+                              </Link>
                             </div>
                           </div>
                         </article>
@@ -580,7 +538,7 @@ function MetricCard({
   description,
   highlight = false,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   description: string;
@@ -602,8 +560,8 @@ function MetricCard({
         <div
           className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl ${
             highlight
-              ? "bg-[#E8C547]/14 text-[#E8C547]"
-              : "bg-white/8 text-white/60"
+              ? "bg-[#E8C547]/10 text-[#E8C547]"
+              : "bg-white/10 text-white/60"
           }`}
         >
           <Icon className="h-4 w-4" />
@@ -625,7 +583,7 @@ function StatusPill({
   children,
   className,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className: string;
 }) {
   return (

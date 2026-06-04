@@ -1,5 +1,8 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
+// Tarjeta de Presentación
+import ConoceMokko from "./pages/ConoceMokko";
+
 // Public
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -15,6 +18,7 @@ import Dashboard from "./pages/Dashboard";
 import MyAccount from "./pages/MyAccount";
 import MyPets from "./pages/MyPets";
 import PetDetails from "./pages/PetDetails";
+import EditPet from "./pages/EditPet";
 import MedicalProfile from "./pages/MedicalProfile";
 import ManagePetPublicProfile from "./pages/ManagePetPublicProfile";
 import Orders from "./pages/Orders";
@@ -41,6 +45,10 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 export default function App() {
   return (
     <Routes>
+      {/* ========== TARJETA DE PRESENTACIÓN ========== */}
+      <Route path="/conoce-mokko" element={<ConoceMokko />} />
+      <Route path="/tarjeta" element={<ConoceMokko />} />
+      
       {/* ================= PUBLIC ================= */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
@@ -88,6 +96,15 @@ export default function App() {
         element={
           <ProtectedRoute>
             <PetDetails />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/mis-mascotas/:id/editar"
+        element={
+          <ProtectedRoute>
+            <EditPet />
           </ProtectedRoute>
         }
       />
