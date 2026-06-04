@@ -328,7 +328,7 @@ export default function Register() {
                     </div>
                     <div className="mt-2 text-sm leading-7 text-white/65">
                       Luego podrás actualizar datos, visibilidad y alertas desde
-                      tu dashboard.
+                      tu panel.
                     </div>
                   </div>
                 </div>

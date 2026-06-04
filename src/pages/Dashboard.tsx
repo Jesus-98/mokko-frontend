@@ -237,7 +237,9 @@ export default function Dashboard() {
         .order("created_at", { ascending: false });
 
       if (petsError) {
-        throw new Error(`No se pudieron cargar tus mascotas: ${petsError.message}`);
+        throw new Error(
+          `No se pudieron cargar tus mascotas: ${petsError.message}`
+        );
       }
 
       const normalizedPets = (petsData ?? []) as PetRow[];
@@ -261,7 +263,7 @@ export default function Dashboard() {
         setReports([]);
 
         if (ordersRes.error) {
-          console.error("Error cargando pedidos en dashboard:", ordersRes.error);
+          console.error("Error cargando pedidos en panel:", ordersRes.error);
           setOrders([]);
           warnings.push("No se pudieron cargar tus pedidos recientes.");
         } else {
@@ -272,28 +274,32 @@ export default function Dashboard() {
         return;
       }
 
-      const [profilesRes, petTagsRes, reportsRes, ordersRes] = await Promise.all([
-        supabase
-          .from("pet_profiles")
-          .select("pet_id, visibility_status, medical_profile_enabled")
-          .in("pet_id", petIds),
+      const [profilesRes, petTagsRes, reportsRes, ordersRes] =
+        await Promise.all([
+          supabase
+            .from("pet_profiles")
+            .select("pet_id, visibility_status, medical_profile_enabled")
+            .in("pet_id", petIds),
 
-        supabase
-          .from("pet_tags")
-          .select("pet_id, status")
-          .in("pet_id", petIds),
+          supabase
+            .from("pet_tags")
+            .select("pet_id, status")
+            .in("pet_id", petIds),
 
-        supabase
-          .from("found_reports")
-          .select("id, pet_id, status, created_at")
-          .in("pet_id", petIds)
-          .order("created_at", { ascending: false }),
+          supabase
+            .from("found_reports")
+            .select("id, pet_id, status, created_at")
+            .in("pet_id", petIds)
+            .order("created_at", { ascending: false }),
 
-        ordersPromise,
-      ]);
+          ordersPromise,
+        ]);
 
       if (profilesRes.error) {
-        console.error("Error cargando perfiles en dashboard:", profilesRes.error);
+        console.error(
+          "Error cargando perfiles en panel:",
+          profilesRes.error
+        );
         setPetProfiles([]);
         warnings.push(
           "No se pudo cargar la configuración pública de algunas mascotas."
@@ -304,7 +310,7 @@ export default function Dashboard() {
 
       if (petTagsRes.error) {
         console.error(
-          "Error cargando placas activas en dashboard:",
+          "Error cargando placas activas en panel:",
           petTagsRes.error.message
         );
         setPetTags([]);
@@ -317,7 +323,7 @@ export default function Dashboard() {
 
       if (reportsRes.error) {
         console.error(
-          "Error cargando reportes en dashboard:",
+          "Error cargando reportes en panel:",
           reportsRes.error.message
         );
         setReports([]);
@@ -329,7 +335,7 @@ export default function Dashboard() {
       }
 
       if (ordersRes.error) {
-        console.error("Error cargando pedidos en dashboard:", ordersRes.error);
+        console.error("Error cargando pedidos en panel:", ordersRes.error);
         setOrders([]);
         warnings.push("No se pudieron cargar tus pedidos recientes.");
       } else {
@@ -338,12 +344,12 @@ export default function Dashboard() {
 
       setWarningMsg(warnings.join(" "));
     } catch (error) {
-      console.error("Error cargando dashboard:", error);
+      console.error("Error cargando panel:", error);
 
       setErrorMsg(
         error instanceof Error
           ? error.message
-          : "Ocurrió un error cargando el dashboard."
+          : "Ocurrió un error cargando el panel."
       );
     } finally {
       setLoading(false);
@@ -473,9 +479,9 @@ export default function Dashboard() {
     if (totalReports > 0) {
       alerts.push({
         id: "reports",
-        title: `${totalReports} reporte${totalReports === 1 ? "" : "s"} pendiente${
+        title: `${totalReports} reporte${
           totalReports === 1 ? "" : "s"
-        }`,
+        } pendiente${totalReports === 1 ? "" : "s"}`,
         description:
           "Revisa las ubicaciones o mensajes enviados desde los perfiles públicos.",
         actionLabel: "Ver reportes",
@@ -586,7 +592,7 @@ export default function Dashboard() {
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <span className="mokko-badge mokko-badge-primary w-fit">
-                      Dashboard Mokko
+                      Panel Mokko
                     </span>
 
                     <h1 className="mt-5 text-3xl font-semibold leading-tight sm:text-5xl">
@@ -613,7 +619,7 @@ export default function Dashboard() {
 
                     <button
                       type="button"
-                      onClick={() => navigate("/mis-mascotas")}
+                      onClick={() => navigate("/mis-mascotas/nueva")}
                       disabled={showLoading}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3.5 text-sm font-semibold text-white/88 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3"
                     >
@@ -753,7 +759,9 @@ export default function Dashboard() {
                           <div className="mt-4 grid gap-3 sm:flex sm:flex-wrap">
                             <button
                               type="button"
-                              onClick={() => navigate("/mis-mascotas")}
+                              onClick={() =>
+                                navigate("/mis-mascotas/nueva")
+                              }
                               className="w-full rounded-2xl bg-[#E8C547] px-4 py-3 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#f0cf55] sm:w-auto"
                             >
                               Agregar mascota
@@ -808,7 +816,9 @@ export default function Dashboard() {
                                           pet.visibilityStatus
                                         )}
                                       >
-                                        {getVisibilityLabel(pet.visibilityStatus)}
+                                        {getVisibilityLabel(
+                                          pet.visibilityStatus
+                                        )}
                                       </StatusPill>
 
                                       {pet.medicalProfileEnabled && (
@@ -849,7 +859,9 @@ export default function Dashboard() {
                               <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
                                 <button
                                   type="button"
-                                  onClick={() => navigate(`/mis-mascotas/${pet.id}`)}
+                                  onClick={() =>
+                                    navigate(`/mis-mascotas/${pet.id}`)
+                                  }
                                   className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/5"
                                 >
                                   Ver detalle
@@ -913,8 +925,8 @@ export default function Dashboard() {
                             Sin actividad reciente
                           </div>
                           <p className="mt-2 text-sm leading-7 text-white/60">
-                            Cuando recibas reportes o generes pedidos, aparecerán
-                            aquí.
+                            Cuando recibas reportes o generes pedidos,
+                            aparecerán aquí.
                           </p>
                         </div>
                       ) : (
@@ -1131,7 +1143,9 @@ function MetricCard({
         </div>
         <div
           className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl sm:h-10 sm:w-10 ${
-            highlight ? "bg-[#E8C547]/14 text-[#E8C547]" : "bg-white/8 text-white/60"
+            highlight
+              ? "bg-[#E8C547]/14 text-[#E8C547]"
+              : "bg-white/8 text-white/60"
           }`}
         >
           <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -1161,8 +1175,8 @@ function AlertCard({
     alert.tone === "danger"
       ? "border-orange-400/20 bg-orange-400/10 text-orange-200"
       : alert.tone === "success"
-      ? "border-[#2D5A27]/25 bg-[#2D5A27]/12 text-green-200"
-      : "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]";
+        ? "border-[#2D5A27]/25 bg-[#2D5A27]/12 text-green-200"
+        : "border-[#E8C547]/20 bg-[#E8C547]/10 text-[#f6df8a]";
 
   return (
     <button

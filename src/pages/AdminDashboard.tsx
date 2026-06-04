@@ -68,6 +68,14 @@ function getChannelLabel(channel: string) {
   return map[channel] || channel;
 }
 
+function getRoleLabel(role?: string | null) {
+  if (role === "admin") return "Administrador";
+  if (role === "partner") return "Aliado";
+  if (role === "customer") return "Cliente";
+
+  return "Sin rol";
+}
+
 function getPriorityClass(tone: PriorityTone) {
   if (tone === "warm") {
     return "border-[#E8C547]/20 bg-[#E8C547]/10";
@@ -115,7 +123,7 @@ export default function AdminDashboard() {
       setRecentOrders(data.recentOrders);
       setSalesByMonth(data.salesByMonth);
     } catch (err) {
-      console.error("Error cargando AdminDashboard:", err);
+      console.error("Error cargando Panel Administrativo:", err);
       setError(
         "No se pudo cargar el panel administrativo. Revisa permisos, políticas de acceso o lecturas de Supabase."
       );
@@ -216,7 +224,7 @@ export default function AdminDashboard() {
         value: metrics.inProductionOrders,
         description: "Pedidos que están en fabricación o preparación.",
         tone: "neutral" as PriorityTone,
-        actionLabel: "Abrir producción",
+        actionLabel: "Ver producción",
         onClick: () => navigate("/admin/pedidos"),
       },
       {
@@ -280,7 +288,7 @@ export default function AdminDashboard() {
             title="Acceso restringido"
             message="No tienes permisos para acceder al panel administrativo."
             backTo="/dashboard"
-            backLabel="Ir a mi dashboard"
+            backLabel="Ir a mi panel"
           />
         </main>
 
@@ -311,7 +319,7 @@ export default function AdminDashboard() {
                       disabled={showLoading}
                       className="w-full sm:w-auto"
                     >
-                      Dashboard cliente
+                      Panel cliente
                     </Button>
 
                     <Button
@@ -580,7 +588,7 @@ export default function AdminDashboard() {
                     <div className="mt-6 grid gap-3">
                       <MiniInfoCard label="Correo" value={displayEmail} />
                       <MiniInfoCard label="Nombre" value={displayName} />
-                      <MiniInfoCard label="Rol" value={role || "admin"} />
+                      <MiniInfoCard label="Rol" value={getRoleLabel(role)} />
                     </div>
                   </Card>
                 </div>

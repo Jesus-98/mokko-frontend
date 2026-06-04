@@ -152,7 +152,7 @@ export default function Header() {
           : "";
 
   const accountActions: AccountAction[] = [
-    { label: "Mi dashboard", onClick: () => goTo("/dashboard") },
+    { label: "Mi panel", onClick: () => goTo("/dashboard") },
     { label: "Mis mascotas", onClick: () => goTo("/mis-mascotas") },
     { label: "Mis placas", onClick: () => goTo("/mis-placas") },
     { label: "Mis reportes", onClick: () => goTo("/mis-reportes") },
@@ -162,7 +162,7 @@ export default function Header() {
 
   if (isAdmin) {
     accountActions.splice(5, 0, {
-      label: "Panel admin",
+      label: "Panel de administración",
       onClick: () => goTo("/admin"),
     });
   }
@@ -200,7 +200,7 @@ export default function Header() {
                   key={link.label}
                   href={link.url}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   onClick={closeMenus}
                   className="relative rounded-xl px-4 py-2 text-sm text-white/60 transition hover:bg-white/5 hover:text-white"
                 >
@@ -368,7 +368,7 @@ export default function Header() {
                   key={link.label}
                   href={link.url}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   onClick={closeMenus}
                   className="rounded-2xl px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/5 hover:text-white"
                 >

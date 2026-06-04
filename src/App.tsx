@@ -18,6 +18,7 @@ import Dashboard from "./pages/Dashboard";
 import MyAccount from "./pages/MyAccount";
 import MyPets from "./pages/MyPets";
 import PetDetails from "./pages/PetDetails";
+import CreatePet from "./pages/CreatePet";
 import EditPet from "./pages/EditPet";
 import MedicalProfile from "./pages/MedicalProfile";
 import ManagePetPublicProfile from "./pages/ManagePetPublicProfile";
@@ -100,6 +101,15 @@ export default function App() {
         }
       />
 
+      <Route
+        path="/mis-mascotas/nueva"
+        element={
+          <ProtectedRoute>
+            <CreatePet />
+          </ProtectedRoute>
+        }
+      />
+      
       <Route
         path="/mis-mascotas/:id/editar"
         element={

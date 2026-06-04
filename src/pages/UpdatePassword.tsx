@@ -280,7 +280,7 @@ export default function UpdatePassword() {
       setConfirmPassword("");
       setRedirecting(true);
       setSuccessMsg(
-        "Contraseña actualizada con éxito. Te estamos llevando a tu dashboard..."
+        "Contraseña actualizada con éxito. Te estamos llevando a tu panel..."
       );
 
       window.setTimeout(() => {

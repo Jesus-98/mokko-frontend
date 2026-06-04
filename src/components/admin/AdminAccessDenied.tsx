@@ -11,7 +11,7 @@ export default function AdminAccessDenied({
   title = "Acceso restringido",
   message = "No tienes permisos para ingresar a esta sección del panel administrativo.",
   backTo = "/dashboard",
-  backLabel = "Volver a mi dashboard",
+  backLabel = "Volver a mi panel",
 }: AdminAccessDeniedProps) {
   return (
     <section className="mx-auto max-w-3xl px-4 py-16">

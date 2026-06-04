@@ -81,6 +81,9 @@ function etiquetaEstadoTag(status?: string | null) {
   switch (status) {
     case "available":
       return "Disponible";
+    case "not_ready":
+    case "not_fabricated":
+      return "No habilitada";
     case "reserved":
       return "Reservada";
     case "activated":
@@ -104,18 +107,36 @@ function normalizarCodigo(valor: string) {
   return valor.replace(/\s+/g, "").trim().toUpperCase();
 }
 
+function isNotFabricatedMessage(message?: string | null) {
+  const normalized = message?.trim().toLowerCase() || "";
+
+  return (
+    normalized.includes("not fabricated") ||
+    normalized.includes("not manufactured") ||
+    normalized.includes("not ready") ||
+    normalized.includes("not enabled") ||
+    normalized.includes("is_fabricated") ||
+    normalized.includes("fabricated=false") ||
+    normalized.includes("no está fabricada") ||
+    normalized.includes("no esta fabricada") ||
+    normalized.includes("aún no está fabricada") ||
+    normalized.includes("aun no esta fabricada") ||
+    normalized.includes("no está habilitada") ||
+    normalized.includes("no esta habilitada") ||
+    normalized.includes("aún no está habilitada") ||
+    normalized.includes("aun no esta habilitada")
+  );
+}
+
 function getReadableTagCheckMessage(
   status?: string | null,
   message?: string | null
 ) {
-  if (status === "activated") return "Esta placa ya fue activada.";
-  if (status === "reserved") return "Esta placa está reservada.";
-  if (status === "suspended") return "Esta placa está suspendida.";
-  if (status === "lost") return "Esta placa figura como extraviada.";
-  if (status === "retired") return "Esta placa fue retirada.";
-  if (status === "available") return "La placa está disponible para activación.";
-
   const normalized = message?.trim().toLowerCase() || "";
+
+  if (isNotFabricatedMessage(message)) {
+    return "Esta placa todavía no está habilitada para activación. Si ya la recibiste, escríbenos por WhatsApp para revisarla.";
+  }
 
   if (normalized.includes("not found")) {
     return "No encontramos ese código de placa.";
@@ -141,11 +162,25 @@ function getReadableTagCheckMessage(
     return "Esta placa fue retirada.";
   }
 
-  return message || "La placa no está disponible.";
+  if (status === "activated") return "Esta placa ya fue activada.";
+  if (status === "reserved") return "Esta placa está reservada.";
+  if (status === "suspended") return "Esta placa está suspendida.";
+  if (status === "lost") return "Esta placa figura como extraviada.";
+  if (status === "retired") return "Esta placa fue retirada.";
+
+  if (status === "available") {
+    return "Esta placa existe, pero todavía no está habilitada para activación. Si ya la recibiste, escríbenos por WhatsApp para revisarla.";
+  }
+
+  return message || "La placa no está disponible para activación.";
 }
 
 function getReadableActivationError(message: string) {
   const normalized = message.trim().toLowerCase();
+
+  if (isNotFabricatedMessage(message)) {
+    return "Esta placa todavía no está habilitada para activación. Si ya la recibiste, escríbenos por WhatsApp para revisarla.";
+  }
 
   if (normalized.includes("already activated")) {
     return "Esta placa ya fue activada.";
@@ -530,8 +565,14 @@ export default function ActivateTag() {
         const mensaje = getReadableTagCheckMessage(estado, respuesta?.message);
 
         setMensajeError(mensaje);
-        setEstadoDetectado(estado);
-        setTipoDetectado(respuesta?.sold_plan_type || null);
+
+        setEstadoDetectado(
+          estado === "available" && isNotFabricatedMessage(respuesta?.message)
+            ? "not_ready"
+            : estado
+        );
+
+        setTipoDetectado(null);
         return false;
       }
 
@@ -983,8 +1024,8 @@ export default function ActivateTag() {
                             Datos de tu mascota
                           </h3>
                           <p className="mt-2 text-sm leading-7 text-white/65">
-                            Completa lo básico ahora. Luego podrás editar más
-                            detalles desde tu dashboard.
+                            Completa lo básico ahora. Luego podrás editar la
+                            información completa desde Mis mascotas.
                           </p>
                         </div>
 
@@ -1354,7 +1395,7 @@ export default function ActivateTag() {
                       onClick={() => navigate("/dashboard")}
                       className="w-full rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
                     >
-                      Ir a mi dashboard
+                      Ir a mi panel
                     </button>
                   </div>
                 </div>

@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
-import PetForm from "../components/pets/PetForm";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 
@@ -110,7 +109,6 @@ export default function MyPets() {
   const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
   const [pets, setPets] = useState<PetCardRow[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -232,10 +230,6 @@ export default function MyPets() {
     void loadPets();
   }, [authLoading, user?.id, loadPets]);
 
-  const openCreate = () => {
-    setShowCreate((prev) => !prev);
-  };
-
   const totalPets = useMemo(() => pets.length, [pets]);
 
   const totalActiveTags = useMemo(
@@ -288,15 +282,13 @@ export default function MyPets() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={openCreate}
-                    disabled={showLoading}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:py-3.5"
+                  <Link
+                    to="/mis-mascotas/nueva"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] shadow-lg shadow-[#E8C547]/20 transition hover:-translate-y-[1px] hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
                   >
                     <Plus className="h-4 w-4" />
-                    {showCreate ? "Cerrar formulario" : "Agregar mascota"}
-                  </button>
+                    Agregar mascota
+                  </Link>
                 </div>
               </div>
 
@@ -337,31 +329,6 @@ export default function MyPets() {
                 />
               </section>
 
-              {showCreate && (
-                <section className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-2xl backdrop-blur-sm sm:p-6 md:rounded-[32px]">
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-semibold leading-tight">
-                      Nueva mascota
-                    </h2>
-                    <p className="text-sm leading-7 text-white/65">
-                      Completa los datos básicos. Luego podrás ampliar con perfil
-                      público, datos médicos y vacunas.
-                    </p>
-                  </div>
-
-                  <div className="mt-6">
-                    <PetForm
-                      mode="create"
-                      onSuccess={() => {
-                        setShowCreate(false);
-                        void loadPets();
-                      }}
-                      onCancel={() => setShowCreate(false)}
-                    />
-                  </div>
-                </section>
-              )}
-
               <section className="mt-7">
                 <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                   <div>
@@ -388,14 +355,13 @@ export default function MyPets() {
                         una placa, completar su perfil y configurar sus datos.
                       </p>
 
-                      <button
-                        type="button"
-                        onClick={() => setShowCreate(true)}
+                      <Link
+                        to="/mis-mascotas/nueva"
                         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E8C547] px-5 py-4 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#f0cf55] sm:w-auto sm:py-3.5"
                       >
                         <Plus className="h-4 w-4" />
                         Agregar mi primera mascota
-                      </button>
+                      </Link>
                     </div>
                   ) : (
                     pets.map((pet) => {
