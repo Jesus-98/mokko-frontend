@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 import Card from "../ui/Card";
@@ -46,6 +53,62 @@ const CUSTOM_BREED_VALUE = "__custom__";
 const PET_PHOTOS_BUCKET = "pet-photos";
 const MAX_PHOTO_SIZE_MB = 5;
 
+const ACCEPTED_PHOTO_EXTENSIONS = /\.(jpg|jpeg|png|webp)$/i;
+const ACCEPTED_PHOTO_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+];
+
+function getPhotoValidationError(file: File) {
+  const fileName = file.name.toLowerCase();
+  const fileType = file.type.toLowerCase();
+
+  if (file.size <= 0) {
+    return "No se pudo leer la imagen seleccionada. Intenta con otra foto o abre la web desde Chrome o Safari.";
+  }
+
+  const isHeic =
+    fileType.includes("heic") ||
+    fileType.includes("heif") ||
+    /\.(heic|heif)$/i.test(fileName);
+
+  if (isHeic) {
+    return "El formato HEIC no es compatible. Sube una foto en JPG, PNG o WEBP. En iPhone puedes usar una captura de pantalla o cambiar el formato de cámara a Más compatible.";
+  }
+
+  const hasValidType = ACCEPTED_PHOTO_TYPES.includes(fileType);
+  const hasValidExtension = ACCEPTED_PHOTO_EXTENSIONS.test(fileName);
+
+  if (!hasValidType && !hasValidExtension) {
+    return "Selecciona una imagen válida en formato JPG, PNG o WEBP.";
+  }
+
+  const maxBytes = MAX_PHOTO_SIZE_MB * 1024 * 1024;
+
+  if (file.size > maxBytes) {
+    return `La foto no debe superar ${MAX_PHOTO_SIZE_MB} MB.`;
+  }
+
+  return "";
+}
+
+function getSafePhotoExtension(file: File) {
+  const rawExt = file.name.split(".").pop()?.toLowerCase();
+
+  if (rawExt === "jpg" || rawExt === "jpeg" || rawExt === "png" || rawExt === "webp") {
+    return rawExt === "jpeg" ? "jpg" : rawExt;
+  }
+
+  const fileType = file.type.toLowerCase();
+
+  if (fileType === "image/png") return "png";
+  if (fileType === "image/webp") return "webp";
+
+  return "jpg";
+}
+
 export default function PetForm({
   mode,
   initialValues,
@@ -53,6 +116,7 @@ export default function PetForm({
   onCancel,
 }: Props) {
   const { user } = useAuth();
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const [loadingBreeds, setLoadingBreeds] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -206,19 +270,49 @@ export default function PetForm({
   };
 
   const handlePhotoChange = (file: File | null) => {
+    setErrorMsg("");
+    setSuccessMsg("");
+
     if (photoPreview?.startsWith("blob:")) {
       URL.revokeObjectURL(photoPreview);
     }
 
-    setPhotoFile(file);
-
     if (!file) {
+      setPhotoFile(null);
       setPhotoPreview(initialValues?.photo_url ?? "");
       return;
     }
 
+    const validationError = getPhotoValidationError(file);
+
+    if (validationError) {
+      setPhotoFile(null);
+      setPhotoPreview(initialValues?.photo_url ?? "");
+      setErrorMsg(validationError);
+      return;
+    }
+
+    setPhotoFile(file);
+
     const previewUrl = URL.createObjectURL(file);
     setPhotoPreview(previewUrl);
+  };
+
+  const handlePhotoInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0] ?? null;
+
+    if (!file) {
+      setErrorMsg(
+        "No se pudo seleccionar la imagen. Abre la web desde Chrome o Safari e intenta nuevamente."
+      );
+
+      e.currentTarget.value = "";
+      return;
+    }
+
+    handlePhotoChange(file);
+
+    e.currentTarget.value = "";
   };
 
   const clearSelectedPhoto = () => {
@@ -228,6 +322,10 @@ export default function PetForm({
 
     setPhotoFile(null);
     setPhotoPreview(initialValues?.photo_url ?? "");
+
+    if (photoInputRef.current) {
+      photoInputRef.current.value = "";
+    }
   };
 
   const validateForm = () => {
@@ -265,6 +363,7 @@ export default function PetForm({
 
     if (weightKg.trim()) {
       const parsed = Number(weightKg);
+
       if (Number.isNaN(parsed) || parsed < 0) {
         setErrorMsg("Ingresa un peso válido.");
         return false;
@@ -272,15 +371,10 @@ export default function PetForm({
     }
 
     if (photoFile) {
-      const isImage = photoFile.type.startsWith("image/");
-      if (!isImage) {
-        setErrorMsg("La foto debe ser una imagen válida.");
-        return false;
-      }
+      const validationError = getPhotoValidationError(photoFile);
 
-      const maxBytes = MAX_PHOTO_SIZE_MB * 1024 * 1024;
-      if (photoFile.size > maxBytes) {
-        setErrorMsg(`La foto no debe superar ${MAX_PHOTO_SIZE_MB} MB.`);
+      if (validationError) {
+        setErrorMsg(validationError);
         return false;
       }
     }
@@ -293,8 +387,7 @@ export default function PetForm({
       return initialValues?.photo_url ?? null;
     }
 
-    const rawExt = photoFile.name.split(".").pop()?.toLowerCase();
-    const safeExt = rawExt && rawExt.length <= 5 ? rawExt : "jpg";
+    const safeExt = getSafePhotoExtension(photoFile);
     const filePath = `${user.id}/${crypto.randomUUID()}.${safeExt}`;
 
     const { error: uploadError } = await supabase.storage
@@ -313,7 +406,7 @@ export default function PetForm({
     return data.publicUrl;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     setErrorMsg("");
@@ -496,12 +589,14 @@ export default function PetForm({
             >
               <div className="space-y-4">
                 <input
+                  ref={photoInputRef}
                   type="file"
-                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  accept="image/*"
                   disabled={formBusy}
-                  onChange={(e) =>
-                    handlePhotoChange(e.target.files?.[0] ?? null)
-                  }
+                  onClick={(e) => {
+                    e.currentTarget.value = "";
+                  }}
+                  onChange={handlePhotoInputChange}
                   className="w-full rounded-2xl border border-white/8 bg-[#141410] px-4 py-3 text-sm text-white outline-none transition file:mr-4 file:rounded-xl file:border-0 file:bg-[#E8C547] file:px-4 file:py-2 file:font-medium file:text-[#1A1A14] hover:file:bg-[#f0cf55] focus:border-[#E8C547]/50"
                 />
 
@@ -511,7 +606,8 @@ export default function PetForm({
                 </div>
 
                 <p className="text-xs leading-6 text-white/50">
-                  JPG, PNG o WEBP. Máximo {MAX_PHOTO_SIZE_MB} MB.
+                  JPG, PNG o WEBP. Máximo {MAX_PHOTO_SIZE_MB} MB. Si usas
+                  iPhone, evita fotos en formato HEIC.
                 </p>
 
                 {(photoFile || photoPreview) && (
@@ -578,8 +674,8 @@ export default function PetForm({
           {submitting
             ? "Guardando..."
             : mode === "create"
-            ? "Guardar mascota"
-            : "Actualizar mascota"}
+              ? "Guardar mascota"
+              : "Actualizar mascota"}
         </Button>
       </div>
     </form>
