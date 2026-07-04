@@ -98,7 +98,7 @@ function obtenerLabelForma(shape: PlateShape) {
 
 function obtenerDetalleTamano(item: OrderPlateItem) {
   if (item.planType === "essential") {
-    return "3 cm diámetro";
+    return "3.4 cm diámetro";
   }
 
   return (
@@ -626,7 +626,7 @@ export default function Order() {
                             <div className="rounded-2xl border border-white/10 bg-[#141410] p-4 text-sm leading-7 text-white/70">
                               Essential usa formato fijo:{" "}
                               <span className="font-medium text-white">
-                                circular · 3 cm de diámetro · color a elección.
+                                circular · 3.4 cm de diámetro · color a elección.
                               </span>
                             </div>
                           ) : (
@@ -672,8 +672,7 @@ export default function Order() {
                                 </div>
 
                                 <p className="mt-2 text-xs leading-6 text-white/45">
-                                  Los tamaños mínimos ya consideran el espacio
-                                  físico del chip NFC.
+                                  Las medidas corresponden al cuerpo principal de la placa, sin contar la zona de la argolla.
                                 </p>
                               </section>
                             </>
