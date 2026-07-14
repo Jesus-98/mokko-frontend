@@ -503,26 +503,6 @@ export default function FoundReportPanel({
           </p>
         </div>
 
-        {modo === "public" && (
-          <button
-            type="button"
-            disabled={procesando}
-            onClick={() => setExpandido((valor) => !valor)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm font-medium text-white/85 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-          >
-            {expandido ? (
-              <>
-                <ChevronUp className="h-4 w-4" />
-                Ocultar detalles
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4" />
-                Agregar más detalles
-              </>
-            )}
-          </button>
-        )}
       </div>
 
       {!permiteReportes && (
@@ -585,28 +565,26 @@ export default function FoundReportPanel({
         )}
       </div>
 
-      {modo !== "public" && (
-        <div className="mt-4">
-          <button
-            type="button"
-            disabled={procesando}
-            onClick={() => setExpandido((valor) => !valor)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/10 bg-white/[0.04] px-5 py-3.5 text-sm font-medium text-white/85 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-          >
-            {expandido ? (
-              <>
-                <ChevronUp className="h-4 w-4" />
-                Ocultar formulario
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4" />
-                Agregar más detalles
-              </>
-            )}
-          </button>
-        </div>
-      )}
+      <div className="mt-4">
+        <button
+          type="button"
+          disabled={procesando}
+          onClick={() => setExpandido((valor) => !valor)}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/10 bg-white/[0.04] px-5 py-3.5 text-sm font-medium text-white/85 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        >
+          {expandido ? (
+            <>
+              <ChevronUp className="h-4 w-4" />
+              {modo === "public" ? "Ocultar detalles" : "Ocultar formulario"}
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-4 w-4" />
+              Agregar más detalles
+            </>
+          )}
+        </button>
+      </div>
 
       {expandido && (
         <form onSubmit={enviarFormulario} className="mt-6 space-y-4">

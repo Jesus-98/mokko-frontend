@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { MapPinned } from "lucide-react";
 import WhatsAppIcon from "../icons/WhatsAppIcon";
 import PhoneIcon from "../icons/PhoneIcon";
@@ -30,6 +31,35 @@ const trustCards = [
 ];
 
 export default function Hero() {
+  const scrollToSection = (
+    event: MouseEvent<HTMLAnchorElement>,
+    sectionId: string
+  ) => {
+    event.preventDefault();
+
+    const section = document.getElementById(sectionId);
+
+    if (!section) return;
+
+    const cssHeaderHeight = getComputedStyle(
+      document.documentElement
+    ).getPropertyValue("--mokko-header-height");
+
+    const headerHeight = Number.parseFloat(cssHeaderHeight) || 112;
+
+    const targetTop =
+      section.getBoundingClientRect().top +
+      window.scrollY -
+      headerHeight;
+
+    window.scrollTo({
+      top: Math.max(targetTop, 0),
+      behavior: "smooth",
+    });
+
+    window.history.replaceState(null, "", `#${sectionId}`);
+  };
+
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.22),transparent_34%)]" />
@@ -56,6 +86,7 @@ export default function Hero() {
           <div className="mt-7 grid gap-3 sm:flex sm:flex-wrap">
             <a
               href="#planes"
+              onClick={(event) => scrollToSection(event, "planes")}
               className="mokko-button-primary inline-flex w-full items-center justify-center rounded-2xl px-6 py-4 text-center text-sm sm:w-auto"
             >
               Protege a tu mascota hoy
@@ -63,6 +94,7 @@ export default function Hero() {
 
             <a
               href="#como-funciona"
+              onClick={(event) => scrollToSection(event, "como-funciona")}
               className="mokko-button-secondary inline-flex w-full items-center justify-center rounded-2xl px-6 py-4 text-center text-sm sm:w-auto"
             >
               Ver cómo funciona

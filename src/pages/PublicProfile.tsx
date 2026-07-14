@@ -8,7 +8,6 @@ import {
 import { Link, useParams } from "react-router-dom";
 import {
   HeartPulse,
-  LockKeyhole,
   MapPinned,
   Shield,
   TriangleAlert,
@@ -367,7 +366,7 @@ export default function PublicProfile() {
       perfil?.message?.trim() ||
       "Si viste a esta mascota, por favor contacta a su familia lo antes posible."
     : esPrivado
-    ? "Este perfil protege la información de la familia. Puedes ayudar enviando tu ubicación o un reporte."
+    ? "La información de contacto de la familia está protegida. Puedes ayudar enviando tu ubicación o un reporte; la información llegará directamente al dueño."
     : perfil?.message?.trim() ||
       "Si encontraste a esta mascota, por favor contacta a su dueño.";
 
@@ -469,8 +468,8 @@ export default function PublicProfile() {
                         : "border-white/10 bg-white/[0.04]"
                     }`}
                   >
-                    <div className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
-                      <div className="min-w-0">
+                    <div className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[auto_1fr] lg:items-start">
+                      <div className="order-1 min-w-0 lg:col-start-1 lg:row-start-1">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <span
@@ -518,70 +517,9 @@ export default function PublicProfile() {
                               .join(" • ")}
                           </p>
                         )}
-
-                        <div
-                          className={`mt-5 rounded-[24px] border px-5 py-5 text-sm leading-7 ${
-                            esLostMode
-                              ? "border-[#E8C547]/25 bg-[#E8C547]/10 text-[#f6df8a]"
-                              : "border-white/10 bg-white/[0.05] text-white/82"
-                          }`}
-                        >
-                          {mensajePrincipal}
-                        </div>
-
-                        {perfil?.emergency_message?.trim() && !esPrivado && (
-                          <div className="mt-4 rounded-[24px] border border-[#E8C547]/25 bg-[#E8C547]/10 px-5 py-5 text-sm leading-7 text-[#f6df8a]">
-                            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#E8C547]">
-                              Mensaje de emergencia
-                            </div>
-                            <div className="text-white">
-                              {perfil.emergency_message}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                          {mostrarWhatsapp && (
-                            <PublicActionLink
-                              href={whatsappUrl}
-                              icon={WhatsAppIcon}
-                              variant="whatsapp"
-                              external
-                            >
-                              Escribir por WhatsApp
-                            </PublicActionLink>
-                          )}
-
-                          {mostrarLlamada && (
-                            <PublicActionLink
-                              href={callUrl}
-                              icon={PhoneIcon}
-                              variant="neutral"
-                            >
-                              Llamar al dueño
-                            </PublicActionLink>
-                          )}
-
-                          <div className="sm:col-span-2">
-                            <PublicActionLink
-                              href="#panel-reporte"
-                              icon={MapPinned}
-                              variant="yellow"
-                            >
-                              Enviar ubicación al dueño
-                            </PublicActionLink>
-                          </div>
-                        </div>
-
-                        {esPrivado && (
-                          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-white/65">
-                            La información de contacto está oculta, pero tu
-                            reporte y ubicación sí llegarán al dueño.
-                          </div>
-                        )}
                       </div>
 
-                      <div className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.05]">
+                      <div className="order-2 overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.05] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-center">
                         {mascota?.photo_url ? (
                           <img
                             src={mascota.photo_url}
@@ -594,122 +532,176 @@ export default function PublicProfile() {
                           </div>
                         )}
                       </div>
+
+                      <div className="order-3 min-w-0 lg:col-start-1 lg:row-start-2">
+                        <div className="flex flex-col">
+                          <div
+                            className={`order-2 rounded-[24px] border px-5 py-5 text-sm leading-7 ${
+                              perfil?.emergency_message?.trim() && !esPrivado
+                                ? "mt-4"
+                                : ""
+                            } ${
+                              esLostMode
+                                ? "border-[#E8C547]/25 bg-[#E8C547]/10 text-[#f6df8a]"
+                                : "border-white/10 bg-white/[0.05] text-white/82"
+                            }`}
+                          >
+                            {mensajePrincipal}
+                          </div>
+
+                          {perfil?.emergency_message?.trim() && !esPrivado && (
+                            <div className="order-1 rounded-[24px] border border-[#E8C547]/25 bg-[#E8C547]/10 px-5 py-5 text-sm leading-7 text-[#f6df8a]">
+                              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#E8C547]">
+                                Mensaje de emergencia
+                              </div>
+                              <div className="text-white">
+                                {perfil.emergency_message}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="order-3 mt-5 grid gap-3 sm:grid-cols-2">
+                            {mostrarWhatsapp && (
+                              <PublicActionLink
+                                href={whatsappUrl}
+                                icon={WhatsAppIcon}
+                                variant="whatsapp"
+                                external
+                              >
+                                Escribir por WhatsApp
+                              </PublicActionLink>
+                            )}
+
+                            {mostrarLlamada && (
+                              <PublicActionLink
+                                href={callUrl}
+                                icon={PhoneIcon}
+                                variant="neutral"
+                              >
+                                Llamar al dueño
+                              </PublicActionLink>
+                            )}
+
+                            <div className="sm:col-span-2">
+                              <PublicActionLink
+                                href="#panel-reporte"
+                                icon={MapPinned}
+                                variant="yellow"
+                              >
+                                Enviar ubicación al dueño
+                              </PublicActionLink>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </section>
 
-                  {esPrivado && (
-                    <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.22)] md:rounded-[34px] md:p-6">
-                      <div className="flex items-start gap-3">
-                        <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.08] text-white/80">
-                          <LockKeyhole className="h-5 w-5" />
+                  <div className="flex flex-col gap-6">
+                    {itemsInfoPublica.length > 0 && (
+                      <section className="order-3 rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.22)] md:rounded-[34px] md:p-6">
+                        <h2 className="text-2xl font-semibold text-white">
+                          Información visible
+                        </h2>
+
+                        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                          {itemsInfoPublica.map((item) => (
+                            <InfoCard
+                              key={`${item.label}-${item.value}`}
+                              label={item.label}
+                              value={item.value}
+                            />
+                          ))}
                         </div>
-                        <div>
-                          <h2 className="text-xl font-semibold text-white">
-                            Perfil protegido
-                          </h2>
-                          <p className="mt-1 text-sm leading-7 text-white/60">
-                            La familia ocultó información sensible por
-                            privacidad. Aun así, puedes ayudar enviando una
-                            ubicación o un reporte.
-                          </p>
-                        </div>
-                      </div>
+                      </section>
+                    )}
+
+                    <section
+                      id="panel-reporte"
+                      className="order-1"
+                      style={{
+                        scrollMarginTop:
+                          "calc(var(--mokko-header-height, 112px) + 16px)",
+                      }}
+                    >
+                      <FoundReportPanel
+                        modo={visibilidad}
+                        permiteReportes={perfil?.allow_found_reports ?? true}
+                        nombreMascota={mascota?.name || "Mascota"}
+                        tagId={datos?.tag_id || null}
+                        petId={mascota?.id || null}
+                        fuenteEscaneo={fuenteEscaneo}
+                      />
                     </section>
-                  )}
 
-                  {itemsInfoPublica.length > 0 && (
-                    <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.22)] md:rounded-[34px] md:p-6">
-                      <h2 className="text-2xl font-semibold text-white">
-                        Información visible
-                      </h2>
-
-                      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                        {itemsInfoPublica.map((item) => (
-                          <InfoCard
-                            key={`${item.label}-${item.value}`}
-                            label={item.label}
-                            value={item.value}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  <section id="panel-reporte">
-                    <FoundReportPanel
-                      modo={visibilidad}
-                      permiteReportes={perfil?.allow_found_reports ?? true}
-                      nombreMascota={mascota?.name || "Mascota"}
-                      tagId={datos?.tag_id || null}
-                      petId={mascota?.id || null}
-                      fuenteEscaneo={fuenteEscaneo}
-                    />
-                  </section>
-
-                  {mostrarSeccionMedica && (
-                    <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.22)] md:rounded-[34px] md:p-6">
-                      <div className="flex items-start gap-3">
-                        <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8C547]/12 text-[#E8C547]">
-                          <HeartPulse className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <h2 className="text-xl font-semibold text-white">
-                            Alertas médicas
-                          </h2>
-                          <p className="mt-1 text-sm leading-7 text-white/55">
-                            Información importante para ayudar con seguridad.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-5 grid gap-3">
-                        <CajaMedica
-                          label="Alergias"
-                          value={medico?.allergies_text}
-                        />
-                        <CajaMedica
-                          label="Condiciones"
-                          value={medico?.conditions_text}
-                        />
-                        <CajaMedica
-                          label="Medicamentos"
-                          value={medico?.medications_text}
-                        />
-                        <CajaMedica label="Dieta" value={medico?.dietary_notes} />
-                        <CajaMedica
-                          label="Esterilizado"
-                          value={
-                            medico?.sterilized == null
-                              ? null
-                              : medico.sterilized
-                              ? "Sí"
-                              : "No"
-                          }
-                        />
-
-                        {mostrarVacunas && (
-                          <div className="mt-3">
-                            <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
-                              Vacunas registradas
-                            </div>
-
-                            <div className="space-y-3">
-                              {vacunas.map((vacuna) => (
-                                <CajaVacuna
-                                  key={vacuna.id}
-                                  nombre={vacuna.vaccine_name}
-                                  aplicada={vacuna.applied_at}
-                                  proximaDosis={vacuna.next_due_at}
-                                  dosis={vacuna.dose_number}
-                                  notas={vacuna.notes}
-                                />
-                              ))}
-                            </div>
+                    {mostrarSeccionMedica && (
+                      <section className="order-2 rounded-[30px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.22)] md:rounded-[34px] md:p-6">
+                        <div className="flex items-start gap-3">
+                          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8C547]/12 text-[#E8C547]">
+                            <HeartPulse className="h-5 w-5" />
                           </div>
-                        )}
-                      </div>
-                    </section>
-                  )}
+                          <div>
+                            <h2 className="text-xl font-semibold text-white">
+                              Alertas médicas
+                            </h2>
+                            <p className="mt-1 text-sm leading-7 text-white/55">
+                              Información importante para ayudar con seguridad.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 grid gap-3">
+                          <CajaMedica
+                            label="Alergias"
+                            value={medico?.allergies_text}
+                          />
+                          <CajaMedica
+                            label="Condiciones"
+                            value={medico?.conditions_text}
+                          />
+                          <CajaMedica
+                            label="Medicamentos"
+                            value={medico?.medications_text}
+                          />
+                          <CajaMedica
+                            label="Dieta"
+                            value={medico?.dietary_notes}
+                          />
+                          <CajaMedica
+                            label="Esterilizado"
+                            value={
+                              medico?.sterilized == null
+                                ? null
+                                : medico.sterilized
+                                ? "Sí"
+                                : "No"
+                            }
+                          />
+
+                          {mostrarVacunas && (
+                            <div className="mt-3">
+                              <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                                Vacunas registradas
+                              </div>
+
+                              <div className="space-y-3">
+                                {vacunas.map((vacuna) => (
+                                  <CajaVacuna
+                                    key={vacuna.id}
+                                    nombre={vacuna.vaccine_name}
+                                    aplicada={vacuna.applied_at}
+                                    proximaDosis={vacuna.next_due_at}
+                                    dosis={vacuna.dose_number}
+                                    notas={vacuna.notes}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

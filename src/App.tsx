@@ -43,205 +43,212 @@ import AdminTagsInventoryPage from "./pages/admin/AdminTagsInventoryPage";
 import AdminRoute from "./routes/AdminRoute";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
+// Navegación
+import ScrollToTop from "./components/layout/ScrollToTop";
+
 export default function App() {
   return (
-    <Routes>
-      {/* ========== TARJETA DE PRESENTACIÓN ========== */}
-      <Route path="/conoce-mokko" element={<ConoceMokko />} />
-      <Route path="/tarjeta" element={<ConoceMokko />} />
-      
-      {/* ================= PUBLIC ================= */}
-      <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/activar" element={<ActivateTag />} />
-      <Route path="/pedido" element={<Order />} />
-      <Route path="/update-password" element={<UpdatePassword />} />
-      <Route path="/privacidad" element={<PrivacyPolicy />} />
-      <Route path="/terminos" element={<TermsConditions />} />
+    <>
+      <ScrollToTop />
 
-      {/* Perfil público QR / NFC */}
-      <Route path="/p/:code" element={<PublicProfile />} />
+      <Routes>
+        {/* ========== TARJETA DE PRESENTACIÓN ========== */}
+        <Route path="/conoce-mokko" element={<ConoceMokko />} />
+        <Route path="/tarjeta" element={<ConoceMokko />} />
 
-      {/* ================= CLIENT ================= */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
+        {/* ================= PUBLIC ================= */}
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/activar" element={<ActivateTag />} />
+        <Route path="/pedido" element={<Order />} />
+        <Route path="/update-password" element={<UpdatePassword />} />
+        <Route path="/privacidad" element={<PrivacyPolicy />} />
+        <Route path="/terminos" element={<TermsConditions />} />
 
-      <Route
-        path="/my-account"
-        element={
-          <ProtectedRoute>
-            <MyAccount />
-          </ProtectedRoute>
-        }
-      />
+        {/* Perfil público QR / NFC */}
+        <Route path="/p/:code" element={<PublicProfile />} />
 
-      {/* Mascotas */}
-      <Route
-        path="/mis-mascotas"
-        element={
-          <ProtectedRoute>
-            <MyPets />
-          </ProtectedRoute>
-        }
-      />
+        {/* ================= CLIENT ================= */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/mis-mascotas/:id"
-        element={
-          <ProtectedRoute>
-            <PetDetails />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/my-account"
+          element={
+            <ProtectedRoute>
+              <MyAccount />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/mis-mascotas/nueva"
-        element={
-          <ProtectedRoute>
-            <CreatePet />
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/mis-mascotas/:id/editar"
-        element={
-          <ProtectedRoute>
-            <EditPet />
-          </ProtectedRoute>
-        }
-      />
+        {/* Mascotas */}
+        <Route
+          path="/mis-mascotas"
+          element={
+            <ProtectedRoute>
+              <MyPets />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/mis-mascotas/:id/perfil-medico"
-        element={
-          <ProtectedRoute>
-            <MedicalProfile />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/mis-mascotas/:id"
+          element={
+            <ProtectedRoute>
+              <PetDetails />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/mis-mascotas/:id/perfil-publico"
-        element={
-          <ProtectedRoute>
-            <ManagePetPublicProfile />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/mis-mascotas/nueva"
+          element={
+            <ProtectedRoute>
+              <CreatePet />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* Pedidos */}
-      <Route
-        path="/mis-pedidos"
-        element={
-          <ProtectedRoute>
-            <Orders />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/mis-mascotas/:id/editar"
+          element={
+            <ProtectedRoute>
+              <EditPet />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/mis-pedidos/:id"
-        element={
-          <ProtectedRoute>
-            <OrderDetail />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/mis-mascotas/:id/perfil-medico"
+          element={
+            <ProtectedRoute>
+              <MedicalProfile />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* Placas del cliente */}
-      <Route
-        path="/mis-placas"
-        element={
-          <ProtectedRoute>
-            <MyTagsPage />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/mis-mascotas/:id/perfil-publico"
+          element={
+            <ProtectedRoute>
+              <ManagePetPublicProfile />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* ================= REPORTES ================= */}
-      <Route
-        path="/mis-reportes"
-        element={
-          <ProtectedRoute>
-            <MyReports />
-          </ProtectedRoute>
-        }
-      />
+        {/* Pedidos */}
+        <Route
+          path="/mis-pedidos"
+          element={
+            <ProtectedRoute>
+              <Orders />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/mis-reportes/:id"
-        element={
-          <ProtectedRoute>
-            <MyReportDetails />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/mis-pedidos/:id"
+          element={
+            <ProtectedRoute>
+              <OrderDetail />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* ================= ADMIN ================= */}
-      <Route
-        path="/admin"
-        element={
-          <AdminRoute>
-            <AdminDashboard />
-          </AdminRoute>
-        }
-      />
+        {/* Placas del cliente */}
+        <Route
+          path="/mis-placas"
+          element={
+            <ProtectedRoute>
+              <MyTagsPage />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/admin/pedidos"
-        element={
-          <AdminRoute>
-            <AdminOrdersPage />
-          </AdminRoute>
-        }
-      />
+        {/* ================= REPORTES ================= */}
+        <Route
+          path="/mis-reportes"
+          element={
+            <ProtectedRoute>
+              <MyReports />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/admin/usuarios"
-        element={
-          <AdminRoute>
-            <AdminUsersPage />
-          </AdminRoute>
-        }
-      />
+        <Route
+          path="/mis-reportes/:id"
+          element={
+            <ProtectedRoute>
+              <MyReportDetails />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/admin/mascotas"
-        element={
-          <AdminRoute>
-            <AdminPetsPage />
-          </AdminRoute>
-        }
-      />
+        {/* ================= ADMIN ================= */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          }
+        />
 
-      <Route
-        path="/admin/reportes"
-        element={
-          <AdminRoute>
-            <AdminReportsPage />
-          </AdminRoute>
-        }
-      />
+        <Route
+          path="/admin/pedidos"
+          element={
+            <AdminRoute>
+              <AdminOrdersPage />
+            </AdminRoute>
+          }
+        />
 
-      <Route
-        path="/admin/inventario-placas"
-        element={
-          <AdminRoute>
-            <AdminTagsInventoryPage />
-          </AdminRoute>
-        }
-      />
+        <Route
+          path="/admin/usuarios"
+          element={
+            <AdminRoute>
+              <AdminUsersPage />
+            </AdminRoute>
+          }
+        />
 
-      {/* ================= FALLBACK ================= */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route
+          path="/admin/mascotas"
+          element={
+            <AdminRoute>
+              <AdminPetsPage />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/reportes"
+          element={
+            <AdminRoute>
+              <AdminReportsPage />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/inventario-placas"
+          element={
+            <AdminRoute>
+              <AdminTagsInventoryPage />
+            </AdminRoute>
+          }
+        />
+
+        {/* ================= FALLBACK ================= */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }

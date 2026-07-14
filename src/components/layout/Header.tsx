@@ -15,9 +15,11 @@ export default function Header() {
   const [activeSection, setActiveSection] = useState("");
   const [scrolled, setScrolled] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(112);
 
   const location = useLocation();
   const navigate = useNavigate();
+  const headerRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
   const { user, profile, role, loading } = useAuth();
@@ -71,6 +73,39 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
+    const updateHeaderHeight = () => {
+      const nextHeight = headerRef.current?.getBoundingClientRect().height;
+
+      if (nextHeight) {
+        setHeaderHeight(nextHeight);
+
+        document.documentElement.style.setProperty(
+          "--mokko-header-height",
+          `${nextHeight}px`
+        );
+      }
+    };
+
+    updateHeaderHeight();
+    window.addEventListener("resize", updateHeaderHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateHeaderHeight);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
     setMobileMenuOpen(false);
     setAccountMenuOpen(false);
   }, [location.pathname]);
@@ -102,22 +137,51 @@ export default function Header() {
     navigate(path);
   };
 
+  const scrollToElement = (id: string, attempt = 0) => {
+    const element = document.getElementById(id);
+
+    if (!element) {
+      if (attempt < 10) {
+        window.setTimeout(() => {
+          scrollToElement(id, attempt + 1);
+        }, 50);
+      }
+
+      return;
+    }
+
+    const currentHeaderHeight =
+      headerRef.current?.getBoundingClientRect().height || headerHeight;
+
+    const targetTop =
+      element.getBoundingClientRect().top +
+      window.scrollY -
+      currentHeaderHeight;
+
+    window.scrollTo({
+      top: Math.max(targetTop, 0),
+      behavior: "smooth",
+    });
+  };
+
   const scrollTo = (href: string) => {
     const id = href.replace("#", "");
+
+    closeMenus();
 
     if (location.pathname !== "/") {
       navigate("/");
 
       window.setTimeout(() => {
-        document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-      }, 150);
+        scrollToElement(id);
+      }, 180);
 
-      closeMenus();
       return;
     }
 
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-    closeMenus();
+    window.setTimeout(() => {
+      scrollToElement(id);
+    }, 40);
   };
 
   const handleLogout = async () => {
@@ -175,7 +239,8 @@ export default function Header() {
 
   return (
     <header
-      className={`sticky top-0 z-40 border-b border-white/10 bg-[#1A1A14]/90 backdrop-blur transition-shadow ${
+      ref={headerRef}
+      className={`sticky top-0 z-50 border-b border-white/10 bg-[#1A1A14]/90 backdrop-blur transition-shadow ${
         scrolled ? "shadow-[0_4px_24px_rgba(0,0,0,0.3)]" : ""
       }`}
     >
@@ -332,6 +397,7 @@ export default function Header() {
           type="button"
           aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
           aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-navigation"
           onClick={() => setMobileMenuOpen((prev) => !prev)}
           className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 lg:hidden"
         >
@@ -356,11 +422,21 @@ export default function Header() {
       </div>
 
       <div
-        className={`overflow-hidden border-t border-white/10 bg-[#141410]/95 transition-all duration-300 lg:hidden ${
-          mobileMenuOpen ? "max-h-[980px] opacity-100" : "max-h-0 opacity-0"
+        id="mobile-navigation"
+        aria-hidden={!mobileMenuOpen}
+        className={`absolute inset-x-0 top-full z-50 border-t border-white/10 bg-[#141410]/[0.98] shadow-[0_24px_60px_rgba(0,0,0,0.45)] transition-all duration-300 lg:hidden ${
+          mobileMenuOpen
+            ? "visible translate-y-0 opacity-100"
+            : "invisible pointer-events-none -translate-y-2 opacity-0"
         }`}
       >
-        <div className="mokko-container flex flex-col gap-1 py-4">
+        <div
+          className="overflow-y-auto overscroll-contain"
+          style={{
+            maxHeight: `calc(100dvh - ${headerHeight}px)`,
+          }}
+        >
+          <div className="mokko-container flex min-h-full flex-col gap-1 py-4 pb-6">
           {navLinks.map((link) => {
             if (link.type === "external" && link.url) {
               return (
@@ -477,6 +553,7 @@ export default function Header() {
                 </button>
               </>
             )}
+          </div>
           </div>
         </div>
       </div>
