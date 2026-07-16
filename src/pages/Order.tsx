@@ -21,8 +21,15 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { buildWhatsAppUrl } from "../config/contact";
 import { FieldLabel, TextInput } from "../components/ui/Field";
+import {
+  formatPrice,
+  getCurrentPlanPrice,
+  type PricingCatalog,
+  type PurchasablePlanType,
+} from "../config/pricing";
+import { usePricingCatalog } from "../hooks/usePricing";
 
-type PlatePlanType = "essential" | "custom";
+type PlatePlanType = PurchasablePlanType;
 type PlateColor = "white" | "black" | "green";
 type PlateShape = "circle" | "bone";
 type PlateSize = "S" | "M" | "L";
@@ -37,16 +44,19 @@ type OrderPlateItem = {
   unitPrice: number;
 };
 
+type RpcOrderItemResult = {
+  sold_plan_type: PlatePlanType;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+};
+
 type RpcOrderResult = {
   order_id: string;
   order_number: string;
   subtotal: number;
   total: number;
-};
-
-const PLAN_PRICES: Record<PlatePlanType, number> = {
-  essential: 29,
-  custom: 39,
+  items?: RpcOrderItemResult[];
 };
 
 const COLOR_OPTIONS: { value: PlateColor; label: string; swatch: string }[] = [
@@ -76,7 +86,10 @@ const SIZE_OPTIONS_BY_SHAPE: Record<
   ],
 };
 
-function createPlateItem(planType: PlatePlanType): OrderPlateItem {
+function createPlateItem(
+  planType: PlatePlanType,
+  pricingCatalog: PricingCatalog
+): OrderPlateItem {
   return {
     id: crypto.randomUUID(),
     planType,
@@ -84,7 +97,7 @@ function createPlateItem(planType: PlatePlanType): OrderPlateItem {
     color: "white",
     shape: "circle",
     size: "S",
-    unitPrice: PLAN_PRICES[planType],
+    unitPrice: getCurrentPlanPrice(planType, pricingCatalog),
   };
 }
 
@@ -120,6 +133,7 @@ function getPlanLabel(plan: PlatePlanType) {
 export default function Order() {
   const location = useLocation();
   const { user, profile } = useAuth();
+  const { catalog: pricingCatalog } = usePricingCatalog();
 
   const [items, setItems] = useState<OrderPlateItem[]>([]);
   const [guestName, setGuestName] = useState(profile?.full_name || "");
@@ -158,10 +172,10 @@ export default function Order() {
 
     if (!initializedRef.current) {
       if (add === "essential" || add === "custom") {
-        setItems([createPlateItem(add)]);
+        setItems([createPlateItem(add, pricingCatalog)]);
         lastProcessedAddRef.current = add;
       } else {
-        setItems([createPlateItem("essential")]);
+        setItems([createPlateItem("essential", pricingCatalog)]);
         lastProcessedAddRef.current = null;
       }
 
@@ -174,10 +188,25 @@ export default function Order() {
       (add === "essential" || add === "custom") &&
       add !== lastProcessedAddRef.current
     ) {
-      setItems((prev) => [...prev, createPlateItem(add)]);
+      setItems((prev) => [...prev, createPlateItem(add, pricingCatalog)]);
       lastProcessedAddRef.current = add;
     }
-  }, [searchParams]);
+  }, [searchParams, pricingCatalog]);
+
+  useEffect(() => {
+    setItems((currentItems) =>
+      currentItems.map((item) => {
+        const currentPrice = getCurrentPlanPrice(
+          item.planType,
+          pricingCatalog
+        );
+
+        return item.unitPrice === currentPrice
+          ? item
+          : { ...item, unitPrice: currentPrice };
+      })
+    );
+  }, [pricingCatalog]);
 
   const subtotal = useMemo(
     () => items.reduce((sum, item) => sum + item.unitPrice, 0),
@@ -225,7 +254,10 @@ export default function Order() {
   };
 
   const addItem = (planType: PlatePlanType) => {
-    setItems((prev) => [...prev, createPlateItem(planType)]);
+    setItems((prev) => [
+      ...prev,
+      createPlateItem(planType, pricingCatalog),
+    ]);
     clearFeedback();
   };
 
@@ -249,7 +281,10 @@ export default function Order() {
         const next = { ...item, [key]: value };
 
         if (key === "planType") {
-          next.unitPrice = PLAN_PRICES[value as PlatePlanType];
+          next.unitPrice = getCurrentPlanPrice(
+            value as PlatePlanType,
+            pricingCatalog
+          );
 
           if (value === "essential") {
             next.petName = "";
@@ -269,15 +304,17 @@ export default function Order() {
     clearFeedback();
   };
 
-  const buildWhatsappMessage = (orderNumber: string) => {
+  const buildWhatsappMessage = (result: RpcOrderResult) => {
     const lines: string[] = [];
 
     lines.push("Hola, quiero realizar este pedido Mokko:");
     lines.push("");
-    lines.push(`Pedido: ${orderNumber}`);
+    lines.push(`Pedido: ${result.order_number}`);
     lines.push("");
 
     items.forEach((item, index) => {
+      const serverItem = result.items?.[index];
+      const unitPrice = Number(serverItem?.unit_price ?? item.unitPrice);
       const colorLabel = obtenerLabelColor(item.color);
       const shapeLabel =
         item.planType === "essential"
@@ -295,11 +332,15 @@ export default function Order() {
       lines.push(`Color: ${colorLabel}`);
       lines.push(`Forma: ${shapeLabel}`);
       lines.push(`Tamaño: ${sizeLabel}`);
-      lines.push(`Precio: S/ ${item.unitPrice.toFixed(2)}`);
+      lines.push(
+        `Precio: ${formatPrice(unitPrice, { alwaysShowDecimals: true })}`
+      );
       lines.push("");
     });
 
-    lines.push(`Total: S/ ${subtotal.toFixed(2)}`);
+    lines.push(
+      `Total: ${formatPrice(Number(result.total), { alwaysShowDecimals: true })}`
+    );
 
     if (guestName.trim()) {
       lines.push("");
@@ -390,11 +431,23 @@ export default function Order() {
         throw new Error("No se recibió una respuesta válida al crear el pedido.");
       }
 
+      if (result.items?.length === items.length) {
+        setItems((currentItems) =>
+          currentItems.map((item, index) => {
+            const serverPrice = Number(result.items?.[index]?.unit_price);
+
+            return Number.isFinite(serverPrice)
+              ? { ...item, unitPrice: serverPrice }
+              : item;
+          })
+        );
+      }
+
       setCreatedOrderId(result.order_id);
       setCreatedOrderNumber(result.order_number);
       setSuccessMsg("Pedido generado correctamente.");
 
-      const whatsappMessage = buildWhatsappMessage(result.order_number);
+      const whatsappMessage = buildWhatsappMessage(result);
       const whatsappUrl = buildWhatsAppUrl(whatsappMessage);
 
       window.open(whatsappUrl, "_blank", "noopener,noreferrer");
@@ -505,7 +558,7 @@ export default function Order() {
                 <MetricCard
                   icon={ReceiptText}
                   label="Subtotal"
-                  value={`S/ ${subtotal.toFixed(2)}`}
+                  value={formatPrice(subtotal, { alwaysShowDecimals: true })}
                   description="Sin envío."
                   highlight
                 />
@@ -539,7 +592,7 @@ export default function Order() {
                                     : "border-white/10 bg-white/5 text-white/75"
                                 }
                               >
-                                S/ {item.unitPrice.toFixed(2)}
+                                {formatPrice(item.unitPrice)}
                               </StatusPill>
                             </div>
                           </div>
@@ -565,7 +618,7 @@ export default function Order() {
                                 active={item.planType === "essential"}
                                 title="Essential"
                                 description="Circular, simple y lista para usar."
-                                price={PLAN_PRICES.essential}
+                                price={getCurrentPlanPrice("essential", pricingCatalog)}
                                 onClick={() =>
                                   updateItem(item.id, "planType", "essential")
                                 }
@@ -575,7 +628,7 @@ export default function Order() {
                                 active={item.planType === "custom"}
                                 title="Custom"
                                 description="Nombre, color, forma y tamaño."
-                                price={PLAN_PRICES.custom}
+                                price={getCurrentPlanPrice("custom", pricingCatalog)}
                                 onClick={() =>
                                   updateItem(item.id, "planType", "custom")
                                 }
@@ -680,7 +733,7 @@ export default function Order() {
 
                           <InfoCard
                             label="Precio de esta placa"
-                            value={`S/ ${item.unitPrice.toFixed(2)}`}
+                            value={formatPrice(item.unitPrice, { alwaysShowDecimals: true })}
                             highlight
                           />
                         </div>
@@ -709,7 +762,7 @@ export default function Order() {
                     <InfoCard label="Total de placas" value={String(items.length)} />
                     <InfoCard
                       label="Subtotal"
-                      value={`S/ ${subtotal.toFixed(2)}`}
+                      value={formatPrice(subtotal, { alwaysShowDecimals: true })}
                       highlight
                     />
 
@@ -847,7 +900,7 @@ function PlanButton({
         </div>
 
         <div className="shrink-0 text-sm font-semibold text-[#E8C547]">
-          S/ {price}
+          {formatPrice(price)}
         </div>
       </div>
     </button>

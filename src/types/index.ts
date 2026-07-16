@@ -10,7 +10,6 @@ export interface PlanFeature {
 export interface Plan {
   id: string;
   name: string;
-  price: string | null;
   priceLabel: string;
   description: string;
   features: string[];

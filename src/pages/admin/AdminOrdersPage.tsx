@@ -24,22 +24,32 @@ type OrderStatus =
 type SoldPlanType = "essential" | "custom" | "partner_batch" | "other";
 type DateFilterField = "created_at" | "confirmed_at";
 
+type OrderItemPricingSnapshot = {
+  rule_id?: string | null;
+  unit_price?: number | null;
+  compare_at_price?: number | null;
+  promotion_label?: string | null;
+};
+
+type OrderItemCustomizationData = {
+  color?: string | null;
+  color_label?: string | null;
+  shape?: string | null;
+  shape_label?: string | null;
+  size?: string | null;
+  size_code?: string | null;
+  size_label?: string | null;
+  pet_name?: string | null;
+  pricing?: OrderItemPricingSnapshot | null;
+};
+
 type OrderItemRow = {
   id: string;
   sold_plan_type: SoldPlanType;
   quantity: number;
   unit_price: number;
   subtotal: number;
-  customization_data: {
-    color?: string | null;
-    color_label?: string | null;
-    shape?: string | null;
-    shape_label?: string | null;
-    size?: string | null;
-    size_code?: string | null;
-    size_label?: string | null;
-    pet_name?: string | null;
-  } | null;
+  customization_data: OrderItemCustomizationData | null;
 };
 
 type OrderRow = {
@@ -279,6 +289,30 @@ function getSizeLabelFromData(custom: OrderItemRow["customization_data"]) {
   return null;
 }
 
+function getItemPricingInfo(item: OrderItemRow) {
+  const snapshot = item.customization_data?.pricing ?? null;
+  const unitPrice = Number(item.unit_price || 0);
+  const quantity = Math.max(Number(item.quantity || 0), 0);
+  const compareAtPrice = Number(snapshot?.compare_at_price || 0);
+  const promotionLabel = snapshot?.promotion_label?.trim() || null;
+
+  const hasPromotion =
+    compareAtPrice > unitPrice || Boolean(promotionLabel);
+
+  const promotionalSavings =
+    compareAtPrice > unitPrice
+      ? (compareAtPrice - unitPrice) * quantity
+      : 0;
+
+  return {
+    hasPromotion,
+    compareAtPrice,
+    promotionalSavings,
+    promotionLabel,
+    pricingRuleId: snapshot?.rule_id || null,
+  };
+}
+
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
 }
@@ -304,8 +338,14 @@ function buildItemSummary(item: OrderItemRow, index: number) {
 
   const parts: string[] = [];
 
+  const pricingInfo = getItemPricingInfo(item);
+
   parts.push(`Placa ${index + 1}`);
   parts.push(getPlanLabel(item.sold_plan_type));
+
+  if (pricingInfo.promotionLabel) {
+    parts.push(`Promoción: ${pricingInfo.promotionLabel}`);
+  }
 
   if (custom?.pet_name) parts.push(`Nombre: ${custom.pet_name}`);
   if (colorLabel) parts.push(`Color: ${colorLabel}`);
@@ -1096,7 +1136,7 @@ export default function AdminOrdersPage() {
     const shippingAmount = parseMoney(draft.shipping_amount);
 
     if (Number.isNaN(discountAmount) || discountAmount < 0) {
-      setErrorMsg("El descuento debe ser un número válido mayor o igual a 0.");
+      setErrorMsg("El descuento adicional debe ser un número válido mayor o igual a 0.");
       return;
     }
 
@@ -1106,7 +1146,7 @@ export default function AdminOrdersPage() {
     }
 
     if (discountAmount > Number(order.subtotal || 0)) {
-      setErrorMsg("El descuento no puede ser mayor al subtotal del pedido.");
+      setErrorMsg("El descuento adicional no puede ser mayor al subtotal del pedido.");
       return;
     }
 
@@ -1160,7 +1200,7 @@ export default function AdminOrdersPage() {
         },
       }));
 
-      setSuccessMsg("Descuento y envío actualizados correctamente.");
+      setSuccessMsg("Descuento adicional y envío actualizados correctamente.");
     } catch (error) {
       console.error("AdminOrdersPage save adjustments error:", error);
 
@@ -1195,11 +1235,14 @@ export default function AdminOrdersPage() {
       "Distrito",
       "Dirección",
       "Canal",
-      "Subtotal",
-      "Descuento",
+      "Subtotal a precio regular",
+      "Subtotal cobrado",
+      "Ahorro promocional",
+      "Descuento adicional",
       "Envío",
       "Total",
       "Moneda",
+      "Promociones aplicadas",
       "Placas",
       "Notas",
     ];
@@ -1208,6 +1251,17 @@ export default function AdminOrdersPage() {
       const itemSummary = order.order_items
         .map((item, index) => buildItemSummary(item, index))
         .join(" | ");
+
+      const pricingSnapshots = order.order_items.map(getItemPricingInfo);
+      const promotionalSavings = pricingSnapshots.reduce(
+        (total, pricing) => total + pricing.promotionalSavings,
+        0
+      );
+      const regularSubtotal =
+        Number(order.subtotal || 0) + promotionalSavings;
+      const promotionLabels = uniqueStrings(
+        pricingSnapshots.map((pricing) => pricing.promotionLabel)
+      ).join(" | ");
 
       return [
         order.order_number,
@@ -1224,11 +1278,14 @@ export default function AdminOrdersPage() {
         order.division_level_3_name || "",
         order.address_line || "",
         formatChannelLabel(order.sales_channel),
+        regularSubtotal.toFixed(2),
         Number(order.subtotal || 0).toFixed(2),
+        promotionalSavings.toFixed(2),
         Number(order.discount_amount || 0).toFixed(2),
         Number(order.shipping_amount || 0).toFixed(2),
         Number(order.total || 0).toFixed(2),
         order.currency || "PEN",
+        promotionLabels,
         itemSummary,
         order.notes || "",
       ];
@@ -1296,7 +1353,7 @@ export default function AdminOrdersPage() {
               <AdminPageHeader
                 badge="Admin · Pedidos"
                 title="Gestión de pedidos"
-                description="Revisa pedidos, filtra por ubicación y fechas, actualiza estados, ajusta envío o descuento y exporta resultados."
+                description="Revisa pedidos, filtra por ubicación y fechas, actualiza estados, ajusta envío o descuento adicional y exporta resultados."
                 actions={
                   <div className="grid w-full gap-3 sm:flex sm:w-auto sm:flex-wrap">
                     <button
@@ -1621,6 +1678,15 @@ export default function AdminOrdersPage() {
                               )
                             : Number(order.total || 0);
 
+                        const promotionalSavings = order.order_items.reduce(
+                          (total, item) =>
+                            total + getItemPricingInfo(item).promotionalSavings,
+                          0
+                        );
+
+                        const regularSubtotal =
+                          Number(order.subtotal || 0) + promotionalSavings;
+
                         const whatsappUrl = getWhatsAppUrl(
                           order.display_whatsapp || order.display_phone,
                           order.order_number
@@ -1692,6 +1758,7 @@ export default function AdminOrdersPage() {
                                     const shapeLabel =
                                       getShapeLabelFromData(custom);
                                     const sizeLabel = getSizeLabelFromData(custom);
+                                    const pricingInfo = getItemPricingInfo(item);
 
                                     return (
                                       <div
@@ -1709,6 +1776,13 @@ export default function AdminOrdersPage() {
                                                 item.sold_plan_type
                                               )}
                                             </div>
+
+                                            {pricingInfo.hasPromotion && (
+                                              <div className="mt-2 inline-flex rounded-full border border-[#E8C547]/20 bg-[#E8C547]/10 px-2.5 py-1 text-[11px] font-medium text-[#f6df8a]">
+                                                {pricingInfo.promotionLabel ||
+                                                  "Precio promocional"}
+                                              </div>
+                                            )}
                                           </div>
 
                                           <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
@@ -1746,13 +1820,43 @@ export default function AdminOrdersPage() {
                                             />
                                           )}
 
+                                          {pricingInfo.hasPromotion &&
+                                            pricingInfo.compareAtPrice >
+                                              Number(item.unit_price || 0) && (
+                                              <div>
+                                                <span className="text-white/45">
+                                                  Precio regular:
+                                                </span>{" "}
+                                                <span className="text-white/45 line-through">
+                                                  {formatMoney(
+                                                    pricingInfo.compareAtPrice,
+                                                    order.currency
+                                                  )}
+                                                </span>
+                                              </div>
+                                            )}
+
                                           <SmallLine
-                                            label="Precio"
+                                            label={
+                                              pricingInfo.hasPromotion
+                                                ? "Precio cobrado"
+                                                : "Precio"
+                                            }
                                             value={formatMoney(
                                               item.unit_price,
                                               order.currency
                                             )}
                                           />
+
+                                          {pricingInfo.promotionalSavings > 0 && (
+                                            <SmallLine
+                                              label="Ahorro promocional"
+                                              value={formatMoney(
+                                                pricingInfo.promotionalSavings,
+                                                order.currency
+                                              )}
+                                            />
+                                          )}
 
                                           <SmallLine
                                             label="Subtotal"
@@ -1838,8 +1942,33 @@ export default function AdminOrdersPage() {
                                 </div>
 
                                 <div className="mt-5 grid gap-3">
+                                  {promotionalSavings > 0 && (
+                                    <>
+                                      <SummaryMiniBox
+                                        label="Subtotal a precio regular"
+                                        value={formatMoney(
+                                          regularSubtotal,
+                                          order.currency
+                                        )}
+                                      />
+
+                                      <SummaryMiniBox
+                                        label="Ahorro promocional"
+                                        value={`-${formatMoney(
+                                          promotionalSavings,
+                                          order.currency
+                                        )}`}
+                                        highlight
+                                      />
+                                    </>
+                                  )}
+
                                   <SummaryMiniBox
-                                    label="Subtotal"
+                                    label={
+                                      promotionalSavings > 0
+                                        ? "Subtotal con promoción"
+                                        : "Subtotal"
+                                    }
                                     value={formatMoney(
                                       order.subtotal,
                                       order.currency
@@ -1847,7 +1976,7 @@ export default function AdminOrdersPage() {
                                   />
 
                                   <MoneyInputBox
-                                    label="Descuento"
+                                    label="Descuento adicional"
                                     value={draft.discount_amount}
                                     disabled={
                                       savingAdjustmentsOrderId === order.id
@@ -1898,7 +2027,7 @@ export default function AdminOrdersPage() {
                                 >
                                   {savingAdjustmentsOrderId === order.id
                                     ? "Guardando ajustes..."
-                                    : "Guardar descuento y envío"}
+                                    : "Guardar descuento adicional y envío"}
                                 </button>
 
                                 <div className="mt-5">

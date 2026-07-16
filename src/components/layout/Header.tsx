@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import { navLinks } from "../../data/navigation";
 import { useAuth } from "../../context/AuthContext";
+import { useSiteAnnouncement } from "../../hooks/useSiteAnnouncement";
 
 type AccountAction = {
   label: string;
@@ -23,6 +24,7 @@ export default function Header() {
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
   const { user, profile, role, loading } = useAuth();
+  const { announcement } = useSiteAnnouncement();
 
   useEffect(() => {
     if (location.pathname !== "/") {
@@ -73,10 +75,14 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
-    const updateHeaderHeight = () => {
-      const nextHeight = headerRef.current?.getBoundingClientRect().height;
+    const headerElement = headerRef.current;
 
-      if (nextHeight) {
+    if (!headerElement) return;
+
+    const updateHeaderHeight = () => {
+      const nextHeight = headerElement.getBoundingClientRect().height;
+
+      if (nextHeight > 0) {
         setHeaderHeight(nextHeight);
 
         document.documentElement.style.setProperty(
@@ -87,9 +93,13 @@ export default function Header() {
     };
 
     updateHeaderHeight();
+
+    const resizeObserver = new ResizeObserver(updateHeaderHeight);
+    resizeObserver.observe(headerElement);
     window.addEventListener("resize", updateHeaderHeight);
 
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener("resize", updateHeaderHeight);
     };
   }, []);
@@ -184,6 +194,31 @@ export default function Header() {
     }, 40);
   };
 
+  const handleAnnouncementClick = () => {
+    const target = announcement?.linkUrl;
+
+    if (!target) return;
+
+    if (target.startsWith("#")) {
+      scrollTo(target);
+      return;
+    }
+
+    if (target.startsWith("/#")) {
+      scrollTo(target.slice(1));
+      return;
+    }
+
+    closeMenus();
+
+    if (target.startsWith("/")) {
+      navigate(target);
+      return;
+    }
+
+    window.location.assign(target);
+  };
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -244,9 +279,29 @@ export default function Header() {
         scrolled ? "shadow-[0_4px_24px_rgba(0,0,0,0.3)]" : ""
       }`}
     >
-      <div className="bg-[#E8C547] py-2 text-center text-xs font-semibold text-[#1A1A14]">
-        🐾 Lanzamiento en Lima · Primeras 50 placas a precio especial
-      </div>
+      {announcement && (
+        <div className="bg-[#E8C547] text-[#1A1A14]">
+          {announcement.linkUrl ? (
+            <button
+              type="button"
+              onClick={handleAnnouncementClick}
+              className="mokko-container flex min-h-9 w-full items-center justify-center gap-2 py-2 text-center text-xs font-semibold transition hover:bg-black/5 sm:text-sm"
+            >
+              <span>{announcement.message}</span>
+
+              {announcement.linkLabel && (
+                <span className="shrink-0 underline underline-offset-2">
+                  {announcement.linkLabel}
+                </span>
+              )}
+            </button>
+          ) : (
+            <div className="mokko-container flex min-h-9 items-center justify-center py-2 text-center text-xs font-semibold sm:text-sm">
+              {announcement.message}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mokko-container flex h-20 items-center justify-between">
         <Link to="/" onClick={closeMenus} className="flex items-center gap-3">

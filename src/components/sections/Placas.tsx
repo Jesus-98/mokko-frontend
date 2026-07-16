@@ -1,14 +1,15 @@
 import { Link } from "react-router-dom";
 import { SUPPORT_WHATSAPP_URLS } from "../../config/contact";
 import { plans } from "../../data/plans";
+import {
+  formatPrice,
+  isPurchasablePlanType,
+  type PricingCatalog,
+} from "../../config/pricing";
+import { usePricingCatalog } from "../../hooks/usePricing";
 import type { Plan } from "../../types";
 
 const ALLY_WHATSAPP_URL = SUPPORT_WHATSAPP_URLS.ally;
-
-const REGULAR_PRICES_BY_PLAN_ID: Record<string, string> = {
-  essential: "S/ 39",
-  custom: "S/ 59",
-};
 
 const sectionBenefits = [
   { icon: "🔒", text: "Pago único, sin suscripciones" },
@@ -47,20 +48,16 @@ function getPlanAction(plan: Plan) {
   };
 }
 
-function getRegularPrice(plan: Plan) {
-  return REGULAR_PRICES_BY_PLAN_ID[normalizeText(plan.id)] ?? null;
-}
-
-function LaunchPriceBlock({
+function PriceBlock({
   plan,
   isHighlighted,
+  pricingCatalog,
 }: {
   plan: Plan;
   isHighlighted: boolean;
+  pricingCatalog: PricingCatalog;
 }) {
-  const regularPrice = getRegularPrice(plan);
-
-  if (!plan.price) {
+  if (!isPurchasablePlanType(plan.id)) {
     return (
       <div className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">
         Planes a tu medida
@@ -68,15 +65,16 @@ function LaunchPriceBlock({
     );
   }
 
+  const pricing = pricingCatalog[plan.id];
   const mutedTextClass = isHighlighted ? "text-black/50" : "text-white/45";
   const priceClass = isHighlighted ? "text-[#1A1A14]" : "text-[#F5F0E8]";
-  const launchPillClass = isHighlighted
+  const promotionPillClass = isHighlighted
     ? "border-black/10 bg-black/10 text-[#1A1A14]"
     : "border-[#E8C547]/25 bg-[#E8C547]/10 text-[#E8C547]";
 
   return (
     <div className="space-y-3">
-      {regularPrice && (
+      {pricing.isOnSale && (
         <div className="flex flex-wrap items-center gap-2">
           <span className={`text-xs font-medium sm:text-sm ${mutedTextClass}`}>
             Precio regular
@@ -84,24 +82,24 @@ function LaunchPriceBlock({
 
           <span
             className={`relative text-xl font-semibold tracking-tight sm:text-2xl ${mutedTextClass}`}
-            aria-label={`Precio regular ${regularPrice}`}
+            aria-label={`Precio regular ${formatPrice(pricing.regularPrice)}`}
           >
             <span className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 rotate-[-8deg] rounded-full bg-current" />
-            {regularPrice}
+            {formatPrice(pricing.regularPrice)}
           </span>
         </div>
       )}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className={`text-4xl font-semibold tracking-tight sm:text-5xl ${priceClass}`}>
-          {plan.price}
+          {formatPrice(pricing.currentPrice)}
         </div>
 
-        {regularPrice && (
+        {pricing.isOnSale && pricing.promotionLabel && (
           <span
-            className={`mb-1 inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] sm:text-xs sm:tracking-[0.16em] ${launchPillClass}`}
+            className={`mb-1 inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] sm:text-xs sm:tracking-[0.16em] ${promotionPillClass}`}
           >
-            Lanzamiento
+            {pricing.promotionLabel}
           </span>
         )}
       </div>
@@ -109,7 +107,13 @@ function LaunchPriceBlock({
   );
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({
+  plan,
+  pricingCatalog,
+}: {
+  plan: Plan;
+  pricingCatalog: PricingCatalog;
+}) {
   const action = getPlanAction(plan);
   const isHighlighted = !!plan.highlighted;
 
@@ -186,7 +190,11 @@ function PlanCard({ plan }: { plan: Plan }) {
         </div>
 
         <div className="mt-5">
-          <LaunchPriceBlock plan={plan} isHighlighted={isHighlighted} />
+          <PriceBlock
+            plan={plan}
+            isHighlighted={isHighlighted}
+            pricingCatalog={pricingCatalog}
+          />
         </div>
 
         <div className={`mt-3 text-sm ${priceLabelClass}`}>
@@ -211,6 +219,8 @@ function PlanCard({ plan }: { plan: Plan }) {
 }
 
 export default function Placas() {
+  const { catalog: pricingCatalog } = usePricingCatalog();
+
   return (
     <section id="planes" className="relative bg-black/20 py-12 md:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
@@ -232,7 +242,11 @@ export default function Placas() {
 
         <div className="mt-8 grid gap-4 md:mt-12 lg:grid-cols-3 lg:gap-6">
           {plans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} />
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              pricingCatalog={pricingCatalog}
+            />
           ))}
         </div>
 

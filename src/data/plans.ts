@@ -4,7 +4,6 @@ export const plans: Plan[] = [
   {
     id: "essential",
     name: "Mokko Essential",
-    price: "S/ 29",
     priceLabel: "Pago único • Sin mensualidades",
     description: "Lo que necesitás para proteger a tu mascota hoy.",
     features: [
@@ -19,7 +18,6 @@ export const plans: Plan[] = [
   {
     id: "custom",
     name: "Mokko Custom",
-    price: "S/ 39",
     priceLabel: "Pago único • Recomendado",
     description: "Con el nombre de tu mascota y diseño personalizado.",
     features: [
@@ -35,7 +33,6 @@ export const plans: Plan[] = [
   {
     id: "partners",
     name: "Mokko Partners",
-    price: null,
     priceLabel: "Tu marca. Nuestras placas.",
     description: "Para veterinarias, tiendas pet y alianzas B2B.",
     features: [
