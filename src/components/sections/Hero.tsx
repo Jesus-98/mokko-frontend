@@ -4,28 +4,29 @@ import WhatsAppIcon from "../icons/WhatsAppIcon";
 import PhoneIcon from "../icons/PhoneIcon";
 
 const benefits = [
-  "Sin app requerida",
-  "Alerta en segundos",
-  "Fabricado en Perú",
+  "Sin app",
+  "NFC + QR",
+  "Contacto en segundos",
+  "Hecho en Perú",
 ];
 
 const trustCards = [
   {
-    title: "Sin app. Solo acerca el celular.",
+    title: "Sin instalar aplicaciones",
     description:
-      "El perfil se abre directo en el navegador. Quien encuentre a tu mascota no necesita instalar nada.",
+      "Quien encuentre a tu mascota no necesita descargar nada. Solo debe acercar su celular a la placa o escanear el código QR para abrir el perfil digital al instante en el navegador.",
     variant: "green",
   },
   {
-    title: "Ideal para",
+    title: "Datos siempre actualizados",
     description:
-      "Dueños, veterinarias, criadores y protectoras que quieren una forma rápida de contacto.",
+      "¿Cambiaste de número o de domicilio? Actualiza tus datos de contacto y la información de tu mascota en segundos, sin tener que comprar una placa nueva.",
     variant: "dark",
   },
   {
-    title: "Más que una placa.",
+    title: "Creada para sus aventuras",
     description:
-      "Mokko combina placa física, NFC, QR y perfil digital para cuidar mejor a tu mascota.",
+      "Una placa ligera, cómoda y fabricada en una sola pieza, pensada para acompañar a tu mascota en sus paseos, juegos y actividades del día a día.",
     variant: "yellow",
   },
 ];
@@ -64,57 +65,50 @@ export default function Hero() {
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(232,197,71,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(45,90,39,0.22),transparent_34%)]" />
 
-      <div className="mokko-container grid gap-8 py-8 sm:py-10 md:py-12 lg:min-h-[calc(100vh-80px)] lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
-        <div className="relative z-10 flex h-full flex-col justify-center">
+      <div className="mokko-container grid gap-6 py-6 sm:gap-8 sm:py-10 md:py-12 lg:min-h-[calc(100vh-80px)] lg:grid-cols-[1.08fr_0.92fr] lg:grid-rows-[auto_auto] lg:items-center lg:gap-x-10 lg:gap-y-6">
+        {/* Texto principal */}
+        <div className="relative z-10 flex flex-col justify-center lg:col-start-1 lg:row-start-1 lg:self-end">
           <span className="mokko-badge mokko-badge-primary w-fit">
             Placa inteligente para mascotas
           </span>
 
-          <h1 className="mt-5 max-w-3xl text-[34px] font-semibold leading-[1.05] tracking-[-0.03em] sm:text-5xl xl:text-6xl">
+          <h1 className="mt-4 max-w-3xl text-[32px] font-semibold leading-[1.08] tracking-[-0.03em] sm:mt-5 sm:text-5xl sm:leading-[1.05] xl:text-6xl">
             Si alguien encuentra a tu mascota,{" "}
             <span className="text-[#E8C547]">
               podrá contactarte en segundos.
             </span>
           </h1>
 
-          <p className="mt-5 max-w-2xl text-[15px] leading-7 text-white/70 sm:text-lg sm:leading-8">
-            Mokko convierte una placa física en una identidad digital para tu
-            mascota. Sin apps, sin complicaciones. Acerca tu celular y contacta
-            al dueño al instante.
+          <p className="mt-4 max-w-2xl text-[15px] leading-7 text-white/70 sm:mt-5 sm:text-lg sm:leading-8">
+            Cada placa Mokko integra tecnología NFC y un código QR vinculados a un
+            perfil digital. Quien encuentre a tu mascota podrá escribirte por
+            WhatsApp, llamarte o enviarte su ubicación, sin instalar ninguna
+            aplicación.
           </p>
 
-          <div className="mt-7 grid gap-3 sm:flex sm:flex-wrap">
+          <div className="mt-6 grid gap-3 sm:mt-7 sm:flex sm:flex-wrap">
             <a
               href="#planes"
               onClick={(event) => scrollToSection(event, "planes")}
-              className="mokko-button-primary inline-flex w-full items-center justify-center rounded-2xl px-6 py-4 text-center text-sm sm:w-auto"
+              className="mokko-button-primary inline-flex w-full items-center justify-center rounded-2xl px-6 py-3.5 text-center text-sm sm:w-auto sm:py-4"
             >
-              Protege a tu mascota hoy
+              Ver placas y precios
             </a>
 
             <a
               href="#como-funciona"
-              onClick={(event) => scrollToSection(event, "como-funciona")}
-              className="mokko-button-secondary inline-flex w-full items-center justify-center rounded-2xl px-6 py-4 text-center text-sm sm:w-auto"
+              onClick={(event) =>
+                scrollToSection(event, "como-funciona")
+              }
+              className="mokko-button-secondary inline-flex w-full items-center justify-center rounded-2xl px-6 py-3.5 text-center text-sm sm:w-auto sm:py-4"
             >
               Ver cómo funciona
             </a>
           </div>
-
-          <div className="mt-6 grid grid-cols-1 gap-2 text-sm text-white/55 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
-            {benefits.map((benefit) => (
-              <div
-                key={benefit}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2"
-              >
-                <span className="text-[#E8C547]">✓</span>
-                {benefit}
-              </div>
-            ))}
-          </div>
         </div>
 
-        <div className="relative z-10 flex w-full items-center justify-center lg:justify-end">
+        {/* Demostración del perfil */}
+        <div className="relative z-10 flex w-full items-center justify-center lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:justify-end lg:self-center">
           <div className="absolute -left-10 top-12 h-36 w-36 rounded-full bg-[#2D5A27]/20 blur-3xl sm:h-44 sm:w-44" />
           <div className="absolute -right-8 -top-6 h-40 w-40 rounded-full bg-[#E8C547]/15 blur-3xl sm:h-48 sm:w-48" />
 
@@ -125,6 +119,7 @@ export default function Hero() {
                   <div className="text-xs text-white/45 sm:text-sm">
                     Mascota encontrada
                   </div>
+
                   <div className="mt-1 text-[24px] font-semibold leading-none text-white sm:text-[28px]">
                     Max
                   </div>
@@ -137,7 +132,7 @@ export default function Hero() {
               </div>
 
               <div className="mt-4 rounded-[20px] bg-[#F5F0E8] p-3 text-[#1A1A14] sm:rounded-[22px]">
-                <div className="aspect-[4/3] w-full overflow-hidden rounded-[16px] bg-[#d9d2c5]">
+                <div className="aspect-[16/11] w-full overflow-hidden rounded-[16px] bg-[#d9d2c5] sm:aspect-[4/3]">
                   <img
                     src="/mascota-hero.jpg"
                     alt="Mascota con perfil Mokko"
@@ -154,6 +149,7 @@ export default function Hero() {
                     <div className="text-[10px] uppercase tracking-[0.14em] text-black/45">
                       Dueño
                     </div>
+
                     <div className="mt-2 text-sm font-semibold sm:text-base">
                       J**** N.
                     </div>
@@ -163,16 +159,17 @@ export default function Hero() {
                     <div className="text-[10px] uppercase tracking-[0.14em] text-black/45">
                       Teléfono
                     </div>
+
                     <div className="mt-2 text-sm font-semibold sm:text-base">
                       +51 9** ***
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="mt-3 grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center gap-2 rounded-[18px] bg-[#25D366] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1ebe5d] sm:py-4"
+                    className="inline-flex items-center justify-center gap-2 rounded-[18px] bg-[#25D366] px-3 py-3 text-sm font-semibold text-white transition hover:bg-[#1ebe5d] sm:px-4 sm:py-4"
                   >
                     <WhatsAppIcon className="h-[18px] w-[18px]" />
                     WhatsApp
@@ -180,7 +177,7 @@ export default function Hero() {
 
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-black/10 bg-white/35 px-4 py-3 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#e6e6e6] sm:py-4"
+                    className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-black/10 bg-white/35 px-3 py-3 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#e6e6e6] sm:px-4 sm:py-4"
                   >
                     <PhoneIcon className="h-[18px] w-[18px]" />
                     Llamar
@@ -188,7 +185,7 @@ export default function Hero() {
 
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center gap-2 rounded-[18px] bg-[#E8C547] px-4 py-3 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#d4b03f] sm:col-span-2"
+                    className="col-span-2 inline-flex items-center justify-center gap-2 rounded-[18px] bg-[#E8C547] px-4 py-3 text-sm font-semibold text-[#1A1A14] transition hover:bg-[#d4b03f] sm:py-4"
                   >
                     <MapPinned className="h-[18px] w-[18px]" />
                     Enviar ubicación
@@ -202,6 +199,19 @@ export default function Hero() {
             </div>
           </div>
         </div>
+
+        {/* Beneficios */}
+        <div className="relative z-10 grid grid-cols-2 gap-2 text-[13px] text-white/60 sm:flex sm:flex-wrap sm:items-center sm:gap-3 lg:col-start-1 lg:row-start-2 lg:self-start">
+          {benefits.map((benefit) => (
+            <div
+              key={benefit}
+              className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2"
+            >
+              <span className="shrink-0 text-[#E8C547]">✓</span>
+              <span>{benefit}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 md:pb-24">
@@ -211,8 +221,8 @@ export default function Hero() {
               card.variant === "green"
                 ? "border-[#2D5A27]/60 bg-[#12311c]"
                 : card.variant === "yellow"
-                ? "border-[#E8C547]/15 bg-[#E8C547]/8"
-                : "border-white/8 bg-white/[0.04]";
+                  ? "border-[#E8C547]/15 bg-[#E8C547]/8"
+                  : "border-white/8 bg-white/[0.04]";
 
             return (
               <div
@@ -222,6 +232,7 @@ export default function Hero() {
                 <div className="text-lg font-semibold leading-7 text-[#E8C547] md:text-xl md:leading-8">
                   {card.title}
                 </div>
+
                 <p className="mt-3 text-sm leading-7 text-white/70">
                   {card.description}
                 </p>
